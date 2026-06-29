@@ -10,8 +10,6 @@ def create_user(db: Session, user: UserCreate):
     db_user = User(
         fullname=user.fullname,
         email=user.email,
-        password=password_hash.hash(user.password),
-        target_role = user.target_role
     )
     db.add(db_user)
     db.commit()
