@@ -20,4 +20,3 @@ def read_user(user_id: int, db: Session = Depends(get_db)):
 
 @router.delete("/{user_id}", response_model=UserResponse)
 def remove_user(user_id: int, db: Session = Depends(get_db)):
-    return delete_user(db, user_id)
