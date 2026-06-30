@@ -2,6 +2,13 @@ from sqlalchemy import Column, Integer, String,Date, Text, Boolean,DateTime,Fore
 from .connection import Base
 from datetime import datetime,timezone
 
+<<<<<<< Updated upstream
+=======
+from sqlalchemy import Column, Integer, String, DateTime, Text, Boolean
+from database.connection import Base
+from datetime import datetime,timezone
+
+>>>>>>> Stashed changes
 def now():
     return datetime.now(timezone.utc)
 
@@ -9,16 +16,26 @@ class User(Base):
     __tablename__ = "users"
 
     id = Column(Integer, primary_key=True, index=True)
+<<<<<<< Updated upstream
     fullname= Column(String(100), nullable= False)
     email= Column(String(100), unique = True, nullable= False)
     password = Column(String,nullable=False)
     target_role = Column(String , nullable=False)
     created_at = Column(DateTime, default=now)
+=======
+    fullname = Column(String, nullable=False)
+    email = Column(String, unique=True, index=True, nullable=False)
+    password = Column(String, nullable=False)
+    target_role = Column(String,nullable= False)
+    created_at = Column(DateTime,default = now())
+
+>>>>>>> Stashed changes
 
 
 class Questions(Base):
     __tablename__ = "questions"
 
+<<<<<<< Updated upstream
     id = Column(Integer,primary_key=True, index=True)
     role= Column(String(50),nullable=False)
     topic= Column(String(100))
@@ -97,3 +114,21 @@ class UserQuestionHistory(Base):
     question_id     = Column(Integer, ForeignKey("questions.id"), nullable=False)
     times_seen      = Column(Integer, default=0)
     last_seen       = Column(DateTime, default=now)
+=======
+    id              = Column(Integer, primary_key=True, index=True)
+    role            = Column(String(50), nullable=False)
+    topic           = Column(String(100))
+    subtopic        = Column(String(100))
+    difficulty      = Column(String(20))
+    question_type   = Column(String(30), nullable=False)
+    question_text   = Column(Text)
+    ideal_answer    = Column(Text)
+    keywords        = Column(Text)
+    code_expected   = Column(Boolean, default=False)
+    verified        = Column(Boolean, default=False)
+    times_asked     = Column(Integer, default=0)
+    created_at      = Column(DateTime, default=now)
+
+
+
+>>>>>>> Stashed changes
