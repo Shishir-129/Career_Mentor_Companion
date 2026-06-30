@@ -4,7 +4,7 @@ from datetime import datetime
 
 
 class QuestionCreate(BaseModel):
-    role = str
+    role : str
     topic: Optional[str] =  None
     subtopic: Optional[str] = None
     difficulty: Optional[str] = None
