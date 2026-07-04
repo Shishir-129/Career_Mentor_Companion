@@ -1,6 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException
 from schemas.question import QuestionCreate, QuestionResponse
 from sqlalchemy.orm import Session
+from schemas.question import QuestionCreate, QuestionResponse, SessionRequest
+from services.question_generator import get_questions_for_session
 
 from crud.questions import (
     create_question,
@@ -43,3 +45,12 @@ def remove_question(question_id: int, db: Session = Depends(get_db)):
     if not question:
         raise HTTPException(status_code=404, detail="Question not found")
     return question
+
+@router.post("/for-session", response_model=list[QuestionResponse])
+def questions_for_session(request: SessionRequest, db: Session = Depends(get_db)):
+    questions = get_questions_for_session(
+        db, request.role, request.level, request.interview_type, request.count
+    )
+    if not questions:
+        raise HTTPException(status_code=404, detail="No questions found for this profile")
+    return questions

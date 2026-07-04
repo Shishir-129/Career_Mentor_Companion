@@ -33,3 +33,9 @@ class QuestionResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+class SessionRequest(BaseModel):
+    role: str           # "Data Engineer"
+    level: str          # "fresher" | "junior" | "mid-level" | "senior"
+    interview_type: str # "technical" | "hr"
+    count: int = 5
