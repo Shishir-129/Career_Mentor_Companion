@@ -39,8 +39,6 @@ def get_questions_for_session(
         {
             "id": q.id,
             "topic": q.topic,
-            "question": q.question_text,
-            "type": q.question_type,
         }
         for q in candidates
     ]
