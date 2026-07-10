@@ -8,9 +8,10 @@ from services.keyword_extractor import extract_keywords
 def backfill():
     db = SessionLocal()
 
+    # fetch ALL questions with ideal_answer
+    # not just empty ones — we want to overwrite bad keywords too
     questions = db.query(Questions).filter(
         Questions.ideal_answer.isnot(None),
-        Questions.keywords == ""
     ).all()
 
     print(f"Found {len(questions)} questions to backfill...")
