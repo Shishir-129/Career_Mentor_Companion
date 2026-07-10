@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from database.models import Responses
 from schemas.response import ResponseCreate, ResponseScoreUpdate
-from services.scoring import score_transcript_audio
+from services.confidence_scoring import score_transcript_audio
 
 
 def create_response(db: Session, response: ResponseCreate):
