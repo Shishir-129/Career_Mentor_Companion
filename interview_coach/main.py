@@ -12,6 +12,7 @@ Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="Interview Coach API")
 
+
 app.include_router(user_router)
 app.include_router(question_router)
 app.include_router(session_router)
