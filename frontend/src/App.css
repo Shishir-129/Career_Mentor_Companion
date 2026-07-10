@@ -10,7 +10,7 @@
   margin-bottom: 24px;
 }
 
-.brand {
+.brand {git 
   font-size: 1.1rem;
   font-weight: 700;
   color: var(--text-h);
@@ -30,6 +30,18 @@
 
 .nav-links a:hover {
   color: var(--accent);
+}
+
+.sign-in-link {
+  background: var(--accent);
+  color: white !important;
+  border-radius: 999px;
+  padding: 8px 14px;
+}
+
+.sign-in-link:hover {
+  background: #1d4ed8;
+  color: white !important;
 }
 
 .hero {
@@ -61,14 +73,29 @@
   max-width: 560px;
 }
 
+.hero-actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
 .cta-button {
   display: inline-block;
   padding: 10px 16px;
   border-radius: 999px;
-  background: var(--accent);
-  color: white;
   text-decoration: none;
   font-weight: 600;
+}
+
+.cta-button.primary {
+  background: var(--accent);
+  color: white;
+}
+
+.cta-button.secondary {
+  background: white;
+  color: var(--accent);
+  border: 1px solid var(--border);
 }
 
 .hero-card {
@@ -94,6 +121,45 @@
 
 .section-card h2 {
   margin-bottom: 8px;
+}
+
+.signin-card {
+  background: linear-gradient(135deg, #eff6ff, #ffffff);
+}
+
+.signin-form {
+  display: grid;
+  gap: 14px;
+  margin-top: 14px;
+  max-width: 420px;
+}
+
+.form-group {
+  display: grid;
+  gap: 6px;
+}
+
+.form-group label {
+  font-weight: 600;
+  color: var(--text-h);
+}
+
+.form-group input {
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  font-size: 0.95rem;
+}
+
+.signin-button {
+  border: none;
+  border-radius: 999px;
+  padding: 10px 16px;
+  background: var(--accent);
+  color: white;
+  font-weight: 700;
+  cursor: pointer;
+  width: fit-content;
 }
 
 .footer {

@@ -10,6 +10,9 @@ function App() {
           <a href="#dashboard">Dashboard</a>
           <a href="#blog">Blog</a>
           <a href="#about">About us</a>
+          <a href="#signin" className="sign-in-link">
+            Sign In
+          </a>
         </nav>
       </header>
 
@@ -21,9 +24,14 @@ function App() {
             <p className="hero-text">
               A simple platform to practice, track progress, and grow your career.
             </p>
-            <a href="#interview" className="cta-button">
-              Start Interview
-            </a>
+            <div className="hero-actions">
+              <a href="#interview" className="cta-button primary">
+                Start Interview
+              </a>
+              <a href="#signin" className="cta-button secondary">
+                Sign In
+              </a>
+            </div>
           </div>
           <div className="hero-card">
             <h2>What you can do</h2>
@@ -53,6 +61,24 @@ function App() {
         <section id="about" className="section-card">
           <h2>About us</h2>
           <p>We build supportive tools to help students prepare for their next step.</p>
+        </section>
+
+        <section id="signin" className="section-card signin-card">
+          <h2>Sign In</h2>
+          <p>Use your account details to access your interview dashboard and progress.</p>
+          <form className="signin-form">
+            <div className="form-group">
+              <label htmlFor="email">Email address</label>
+              <input id="email" name="email" type="email" placeholder="you@example.com" required />
+            </div>
+            <div className="form-group">
+              <label htmlFor="password">Password</label>
+              <input id="password" name="password" type="password" placeholder="Enter your password" required />
+            </div>
+            <button type="submit" className="signin-button">
+              Sign In
+            </button>
+          </form>
         </section>
       </main>
 
