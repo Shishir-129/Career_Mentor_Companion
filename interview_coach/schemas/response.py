@@ -1,9 +1,10 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from typing import Optional
 from datetime import datetime
 
 
 class ResponseCreate(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
     session_id: int
     user_id: int
     question_id: int
@@ -14,6 +15,7 @@ class ResponseCreate(BaseModel):
 
 
 class ResponseResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
     id: int
     session_id: int
     user_id: int

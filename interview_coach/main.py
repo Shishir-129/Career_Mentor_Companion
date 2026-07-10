@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 import librosa
 import whisper
 
-from crud.responses import create_response
+from crud.responses import create_response_from_audio
 from database.connection import Base, engine, get_db
 from routers.users import router as user_router
 from routers.questions import router as question_router
@@ -64,31 +64,17 @@ async def upload_and_store_transcript(
     audio_file: UploadFile = File(...),
     db: Session = Depends(get_db),
 ):
-    if not audio_file.filename:
-        raise HTTPException(status_code=400, detail="Audio file is required")
-
-    file_extension = Path(audio_file.filename).suffix or ".wav"
-    saved_path = UPLOAD_DIR / f"{uuid4().hex}{file_extension}"
-
-    try:
-        with saved_path.open("wb") as buffer:
-            shutil.copyfileobj(audio_file.file, buffer)
-
-        transcript = transcribe_audio(str(saved_path))
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Transcription failed: {exc}") from exc
-
-    response_data = ResponseCreate(
+    return create_response_from_audio(
+        db=db,
+        audio_file=audio_file,
         session_id=session_id,
         user_id=user_id,
         question_id=question_id,
         question_type=question_type,
         topic=topic,
-        transcript=transcript,
-        audio_file_path=str(saved_path),
+        upload_dir=UPLOAD_DIR,
+        transcribe_fn=transcribe_audio,
     )
-
-    return create_response(db, response_data)
 
 
 if __name__ == "__main__":
