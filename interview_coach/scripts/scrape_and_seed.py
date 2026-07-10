@@ -6,6 +6,7 @@ from bs4 import BeautifulSoup
 from database.connection import SessionLocal
 from crud.questions import create_question
 from schemas.question import QuestionCreate
+from services.keyword_extractor import extract_keywords   # ← ADD THIS
 
 DIFFICULTY_MAP = {
     "👶": "easy",
@@ -18,7 +19,7 @@ def get_difficulty(text):
     for emoji, level in DIFFICULTY_MAP.items():
         if emoji in text:
             return level, text.replace(emoji, "").strip()
-    return None, text  # not a question line
+    return None, text
 
 def scrape():
     url = "https://alexeygrigorev.com/data-science-interviews/theory"
@@ -42,18 +43,18 @@ def scrape():
             difficulty, question_text = get_difficulty(text)
 
             if difficulty and question_text and current_topic:
-                # Collect answer from following <p> tags
                 answer_parts = []
                 j = i + 1
                 while j < len(all_tags):
                     next_tag = all_tags[j]
                     next_text = next_tag.get_text(strip=True)
-                    # Stop when we hit the next question or a new section
                     if next_tag.name == "h2" or get_difficulty(next_text)[0] is not None:
                         break
                     if next_tag.name == "p" and next_text:
                         answer_parts.append(next_text)
                     j += 1
+
+                ideal_answer_text = " ".join(answer_parts[:3])   # ← CHANGE THIS
 
                 questions.append(QuestionCreate(
                     role="Data Scientist",
@@ -61,8 +62,8 @@ def scrape():
                     difficulty=difficulty,
                     question_type="theory",
                     question_text=question_text,
-                    ideal_answer=" ".join(answer_parts[:3]),
-                    keywords="",
+                    ideal_answer=ideal_answer_text,
+                    keywords=", ".join(extract_keywords(ideal_answer_text)),  # ← CHANGE THIS
                     verified=True,
                 ))
         i += 1
