@@ -22,12 +22,13 @@ def get_difficulty(text):
     return None, text
 
 def scrape():
-    url = "https://alexeygrigorev.com/data-science-interviews/theory"
+    url = "https://alexeygrigorev.com/data-science-interviews/theory.html"
     soup = BeautifulSoup(requests.get(url).text, "html.parser")
 
     questions = []
     current_topic = None
-    all_tags = soup.find_all(["h2", "p"])
+    # Include ul and pre so bullet points and code blocks are captured
+    all_tags = soup.find_all(["h2", "p", "ul", "pre"])
 
     i = 0
     while i < len(all_tags):
@@ -47,14 +48,34 @@ def scrape():
                 j = i + 1
                 while j < len(all_tags):
                     next_tag = all_tags[j]
-                    next_text = next_tag.get_text(strip=True)
-                    if next_tag.name == "h2" or get_difficulty(next_text)[0] is not None:
+
+                    if next_tag.name == "h2":
                         break
-                    if next_tag.name == "p" and next_text:
-                        answer_parts.append(next_text)
+
+                    if next_tag.name == "p":
+                        next_text = next_tag.get_text(strip=True)
+                        if get_difficulty(next_text)[0] is not None:
+                            break
+                        if next_text:
+                            answer_parts.append(next_text)
+
+                    elif next_tag.name == "ul":
+                        items = [
+                            f"- {li.get_text(strip=True)}"
+                            for li in next_tag.find_all("li")
+                            if li.get_text(strip=True)
+                        ]
+                        if items:
+                            answer_parts.append("\n".join(items))
+
+                    elif next_tag.name == "pre":
+                        code_text = next_tag.get_text(strip=True)
+                        if code_text:
+                            answer_parts.append(f"```\n{code_text}\n```")
+
                     j += 1
 
-                ideal_answer_text = " ".join(answer_parts[:3])   # ← CHANGE THIS
+                ideal_answer_text = "\n\n".join(answer_parts)
 
                 questions.append(QuestionCreate(
                     role="Data Scientist",
@@ -63,7 +84,7 @@ def scrape():
                     question_type="theory",
                     question_text=question_text,
                     ideal_answer=ideal_answer_text,
-                    keywords=", ".join(extract_keywords(ideal_answer_text)),  # ← CHANGE THIS
+                    keywords=", ".join(extract_keywords(ideal_answer_text)),
                     verified=True,
                 ))
         i += 1
