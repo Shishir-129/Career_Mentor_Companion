@@ -10,6 +10,7 @@ class ResponseCreate(BaseModel):
     question_type: Optional[str] = None
     topic: Optional[str] = None
     transcript: Optional[str] = None
+    audio_file_path: Optional[str] = None
 
 
 class ResponseResponse(BaseModel):
