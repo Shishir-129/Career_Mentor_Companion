@@ -86,29 +86,29 @@ def score_transcript_audio(
 
     speaking_speed = round(word_count / (duration / 60.0), 2) if duration > 0 else 0.0
 
-    if 120 <= speaking_speed <= 180:
+    if 130 <= speaking_speed <= 150:
         pace_score = 1.0
-    elif 90 <= speaking_speed <= 210:
+    elif 129 <= speaking_speed <= 151:
         pace_score = 0.8
-    elif 60 <= speaking_speed <= 240:
+    elif 115 <= speaking_speed <= 181:
         pace_score = 0.6
     else:
         pace_score = 0.3
 
-    if pause_count <= 1:
+    if pause_count <= 2:
         pause_score = 1.0
-    elif pause_count <= 3:
-        pause_score = 0.8
     elif pause_count <= 5:
+        pause_score = 0.8
+    elif pause_count <= 8:
         pause_score = 0.6
     else:
         pause_score = 0.3
 
     if filler_count == 0:
         filler_score = 1.0
-    elif filler_count <= 2:
-        filler_score = 0.8
     elif filler_count <= 4:
+        filler_score = 0.8
+    elif filler_count <= 8:
         filler_score = 0.6
     else:
         filler_score = 0.3
