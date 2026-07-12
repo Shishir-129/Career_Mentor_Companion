@@ -116,10 +116,33 @@ def _count_fillers(tokens: list[str], text_lower: str) -> int:
     return count
 
 
-def score_transcript_audio(
-    transcript: Optional[str],
-    audio_path: Optional[str],
-) -> dict:
+def analyze_audio(audio_path: str) -> dict:
+    """
+    Librosa-only analysis: extracts duration and hesitation pause count.
+    Designed to run in parallel with Whisper since both only need the audio
+    file and are completely independent of each other.
+    """
+    duration_secs = 0.0
+    pause_count   = 0
+    try:
+        y, sr = librosa.load(audio_path, sr=16000, mono=True)
+        duration_secs = len(y) / sr if sr else 0.0
+        if len(y) > 0:
+            intervals = librosa.effects.split(y, top_db=30)
+            for i in range(1, len(intervals)):
+                gap_secs = (intervals[i][0] - intervals[i - 1][1]) / sr
+                if gap_secs >= 1.0:   # only genuine hesitation pauses (>1s)
+                    pause_count += 1
+    except Exception:
+        pass
+    return {"duration_secs": duration_secs, "pause_count": pause_count}
+
+
+def compute_delivery_scores(transcript: str, duration_secs: float, pause_count: int) -> dict:
+    """
+    Computes all delivery scores from transcript text + pre-computed audio data.
+    Call this after both Whisper and analyze_audio() have completed.
+    """
     transcript = (transcript or "").strip()
     tokens     = _normalize_tokens(transcript)
     word_count = len(tokens)
@@ -128,34 +151,12 @@ def score_transcript_audio(
         return {
             "grammar_score":    0.0,
             "confidence_score": 0.0,
-            "final_score":      0.0,
             "speaking_speed":   0.0,
             "pause_count":      0,
             "filler_count":     0,
             "llm_feedback":     "No transcript detected.",
         }
 
-    # ── Audio analysis via librosa ────────────────────────────────────────────
-    duration_secs = 0.0
-    pause_count   = 0
-    try:
-        if audio_path:
-            y, sr = librosa.load(audio_path, sr=16000, mono=True)
-            duration_secs = len(y) / sr if sr else 0.0
-            if len(y) > 0:
-                # top_db=30: standard threshold; ignores breath/room noise
-                intervals = librosa.effects.split(y, top_db=30)
-                for i in range(1, len(intervals)):
-                    # only count pauses > 1 second as genuine hesitation
-                    # pauses < 1s are natural sentence/clause boundaries
-                    gap_secs = (intervals[i][0] - intervals[i - 1][1]) / sr
-                    if gap_secs >= 1.0:
-                        pause_count += 1
-    except Exception:
-        duration_secs = 0.0
-        pause_count   = 0
-
-    # ── Sub-scores (all 0–1 internally) ──────────────────────────────────────
     wpm          = round(word_count / (duration_secs / 60.0), 1) if duration_secs > 0 else 0.0
     filler_count = _count_fillers(tokens, transcript.lower())
 
@@ -164,8 +165,6 @@ def score_transcript_audio(
     filler_s  = _filler_score(filler_count, word_count)
     pause_s   = _pause_score(pause_count, duration_secs)
 
-    # ── Weighted confidence score → scaled to 0–100 ───────────────────────────
-    #   confidence = Σ (sub_score × weight) × 100
     raw = (
         grammar_s * WEIGHTS["grammar"] +
         filler_s  * WEIGHTS["filler"]  +
@@ -175,7 +174,6 @@ def score_transcript_audio(
     confidence_score = round(raw * 100, 2)
     grammar_score    = round(grammar_s * 100, 2)
 
-    # ── Label & actionable feedback ───────────────────────────────────────────
     if   confidence_score >= 85: label = "Excellent"
     elif confidence_score >= 65: label = "Good"
     elif confidence_score >= 45: label = "Fair"
@@ -203,6 +201,24 @@ def score_transcript_audio(
         "filler_count":     filler_count,
         "llm_feedback":     feedback,
     }
+
+
+def score_transcript_audio(
+    transcript: Optional[str],
+    audio_path: Optional[str],
+) -> dict:
+    """
+    Convenience wrapper — runs analyze_audio + compute_delivery_scores
+    sequentially. Use analyze_audio() + compute_delivery_scores() directly
+    when parallelising with Whisper transcription.
+    """
+    audio_data = analyze_audio(audio_path) if audio_path else {"duration_secs": 0.0, "pause_count": 0}
+    return compute_delivery_scores(
+        transcript=transcript or "",
+        duration_secs=audio_data["duration_secs"],
+        pause_count=audio_data["pause_count"],
+    )
+
 
 
 
