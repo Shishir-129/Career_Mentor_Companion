@@ -1,14 +1,19 @@
 from pathlib import Path
+import json
+import os
 import shutil
+from concurrent.futures import ThreadPoolExecutor
 from uuid import uuid4
 from typing import Callable, Optional
 
 from fastapi import HTTPException, UploadFile
 from sqlalchemy.orm import Session
 
-from database.models import Responses
+from database.models import Questions, Responses
 from schemas.response import ResponseCreate, ResponseScoreUpdate
-from services.confidence_scoring import score_transcript_audio
+from services.confidence_scoring import analyze_audio, compute_delivery_scores
+from services.answer_quality_scorer import compute_answer_quality_score
+from services.feedback_generator import generate_feedback
 
 
 def create_response(db: Session, response: ResponseCreate):
@@ -42,33 +47,103 @@ def create_response_from_audio(
     file_extension = Path(audio_file.filename).suffix or ".wav"
     saved_path = upload_dir / f"{uuid4().hex}{file_extension}"
 
+    # ── 1. Save audio file temporarily ───────────────────────────────────────
     try:
         with saved_path.open("wb") as buffer:
             shutil.copyfileobj(audio_file.file, buffer)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Failed to save audio: {exc}") from exc
 
-        transcript = transcribe_fn(str(saved_path)) if transcribe_fn else ""
+    audio_path = str(saved_path)
+
+    try:
+        # ── 2. Run Whisper (transcription) + Librosa (audio analysis) in parallel
+        #       Both only need the audio file — no dependency between them
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            future_transcript = executor.submit(transcribe_fn, audio_path) if transcribe_fn else None
+            future_audio_data = executor.submit(analyze_audio, audio_path)
+
+            transcript = future_transcript.result() if future_transcript else ""
+            audio_data = future_audio_data.result()   # {duration_secs, pause_count}
+
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Transcription failed: {exc}") from exc
+    finally:
+        # ── 3. Delete audio immediately — it has served its purpose ──────────
+        try:
+            os.remove(audio_path)
+        except OSError:
+            pass
 
-    scores = score_transcript_audio(
+    # ── 2. Fetch question data from DB (ideal answer, keywords, components) ──
+    question = db.query(Questions).filter(Questions.id == question_id).first()
+    ideal_answer        = (question.ideal_answer        or "") if question else ""
+    keywords_str        = (question.keywords            or "") if question else ""
+    expected_components = (question.expected_components or "") if question else ""
+
+    # ── 3. Confidence / delivery scoring ─────────────────────────────────────
+    conf = compute_delivery_scores(
         transcript=transcript,
-        audio_path=str(saved_path),
+        duration_secs=audio_data["duration_secs"],
+        pause_count=audio_data["pause_count"],
     )
 
-    response_data = ResponseCreate(
+    # ── 4. Answer quality scoring (transcript vs ideal answer) ───────────────
+    quality = compute_answer_quality_score(
+        user_answer=transcript,
+        ideal_answer=ideal_answer,
+        keywords_str=keywords_str,
+        expected_components_json=expected_components,
+    )
+
+    # ── 5. Generate narrative feedback (FLAN-T5) ─────────────────────────────
+    feedback = generate_feedback(
+        answer_quality_score=quality["answer_quality_score"],
+        quality_label=quality["quality_label"],
+        semantic_score=quality["semantic_score"],
+        keyword_score=quality["keyword_score"],
+        completeness_score=quality["completeness_score"],
+        missed_keywords=quality["missed_keywords"],
+        components_missing=quality["components_missing"],
+        coaching_tips=quality["coaching_tips"],
+        confidence_score=conf["confidence_score"],
+        grammar_score=conf["grammar_score"],
+        speaking_speed=conf["speaking_speed"],
+        filler_count=conf["filler_count"],
+        pause_count=conf["pause_count"],
+    )
+
+    # ── 6. Build and save the response row directly (no schema gymnastics) ───
+    db_response = Responses(
         session_id=session_id,
         user_id=user_id,
         question_id=question_id,
         question_type=question_type,
         topic=topic,
         transcript=transcript,
-        audio_file_path=str(saved_path),
+        # audio_file_path intentionally not stored — file is deleted after processing
+        # Answer quality — WHAT was said
+        semantic_score=quality["semantic_score"],
+        keyword_score=quality["keyword_score"],
+        completeness_score=quality["completeness_score"],
+        answer_quality_score=quality["answer_quality_score"],
+        missed_keywords=", ".join(quality["missed_keywords"]),
+        # Confidence / delivery — HOW it was said
+        confidence_score=conf["confidence_score"],
+        grammar_score=conf["grammar_score"],
+        speaking_speed=conf["speaking_speed"],
+        pause_count=conf["pause_count"],
+        filler_count=conf["filler_count"],
+        # Feedback
+        llm_feedback=feedback["narrative_feedback"],
+        strengths=json.dumps(feedback["strengths"]),
+        improvements=json.dumps(feedback["improvements"]),
     )
 
-    response_data_dict = response_data.model_dump()
-    response_data_dict.update(scores)
-
-    return create_response(db, ResponseCreate(**response_data_dict))
+    db.add(db_response)
+    db.commit()
+    db.refresh(db_response)
+    return db_response
 
 
 def get_response(db: Session, response_id: int):

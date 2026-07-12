@@ -66,12 +66,14 @@ class Responses(Base):
     transcript = Column(Text)
     semantic_score = Column(Float)
     keyword_score = Column(Float)
+    completeness_score = Column(Float)
+    answer_quality_score = Column(Float)
     grammar_score = Column(Float)
-    relevance_score = Column(Float)
     confidence_score = Column(Float)
-    final_score = Column(Float)
     missed_keywords = Column(Text)
-    llm_feedback = Column(Text)
+    llm_feedback = Column(Text)          # FLAN-T5 narrative paragraph
+    strengths = Column(Text)             # JSON array  e.g. '["Good vocabulary", ...]'
+    improvements = Column(Text)          # JSON array  e.g. '["Add examples", ...]'
     speaking_speed = Column(Float)
     pause_count = Column(Integer)
     filler_count = Column(Integer)
