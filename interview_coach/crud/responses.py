@@ -53,9 +53,6 @@ def create_response_from_audio(
     scores = score_transcript_audio(
         transcript=transcript,
         audio_path=str(saved_path),
-        question_text=question_text,
-        ideal_answer=ideal_answer,
-        keywords=keywords,
     )
 
     response_data = ResponseCreate(
@@ -72,8 +69,6 @@ def create_response_from_audio(
     response_data_dict.update(scores)
 
     return create_response(db, ResponseCreate(**response_data_dict))
-
-    return create_response(db, response_data)
 
 
 def get_response(db: Session, response_id: int):
