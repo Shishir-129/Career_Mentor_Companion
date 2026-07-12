@@ -3,147 +3,206 @@ from typing import Optional
 
 import librosa
 
+# ─── Filler word bank ─────────────────────────────────────────────────────────
+# Excludes context-dependent words like "so", "well", "like"
 FILLER_WORDS = {
-    "ah",
-    "eh",
-    "um",
-    "uh",
-    "like",
-    "you know",
-    "actually",
-    "basically",
-    "so",
-    "humm",
-    "hmm",
-    "well",
-    "literally",
-    "seriously",
+    "um", "uh", "ah", "eh", "hmm", "humm",
+    "you know", "i mean", "kind of", "sort of",
+    "literally", "basically", "actually", "right",
 }
 
+# ─── Score weights — must sum to 1.0 ─────────────────────────────────────────
+# Grammar  35%: language quality, most evaluated by interviewers
+# Filler   30%: nervousness signal, highly noticeable
+# Pace     20%: clarity of delivery
+# Pause    15%: hesitation — some pauses are natural
+WEIGHTS = {
+    "grammar": 0.35,
+    "filler":  0.30,
+    "pace":    0.20,
+    "pause":   0.15,
+}
 
-def _normalize_text(text: Optional[str]) -> list[str]:
-    if not text:
-        return []
+# ─── Speaking pace bands (words per minute) ───────────────────────────────────
+PACE_EXCELLENT = (120, 155)   # ideal interview delivery
+PACE_GOOD      = (100, 175)
+PACE_FAIR      = (85,  190)
+
+
+# ─── Precomputed filler sets (split once at import, not on every call) ────────
+_FILLER_SINGLE = {w for w in FILLER_WORDS if " " not in w}
+_FILLER_MULTI  = {w for w in FILLER_WORDS if " " in w}
+
+
+def _normalize_tokens(text: str) -> list[str]:
     return re.findall(r"[a-z0-9']+", text.lower())
 
 
 def _grammar_score(text: str) -> float:
-    tokens = _normalize_text(text)
-    if not tokens:
+    """
+    Grammar quality proxy (no heavy NLP library needed):
+      1. Type-token ratio  — vocabulary diversity (higher = richer language)
+      2. Avg sentence length — 8–20 words/sentence is natural in speech
+      3. Consecutive word repetition penalty — catches stuttering
+    Returns 0.0 – 1.0.
+    """
+    tokens = _normalize_tokens(text)
+    word_count = len(tokens)
+    if word_count < 3:
+        return 0.2
+
+    # 1. Vocabulary diversity
+    ttr = len(set(tokens)) / word_count
+
+    # 2. Sentence length naturalness
+    sentences = [s.strip() for s in re.split(r"[.!?]+", text) if s.strip()]
+    avg_len = word_count / max(len(sentences), 1)
+    if 8 <= avg_len <= 20:
+        length_score = 1.0
+    elif 5 <= avg_len <= 30:
+        length_score = 0.7
+    else:
+        length_score = 0.4
+
+    # 3. Stuttering penalty
+    repetitions = sum(1 for i in range(1, len(tokens)) if tokens[i] == tokens[i - 1])
+    penalty = min(repetitions * 0.1, 0.3)
+
+    score = (ttr * 0.5) + (length_score * 0.5) - penalty
+    return round(max(0.0, min(1.0, score)), 2)
+
+
+def _pace_score(wpm: float) -> float:
+    if PACE_EXCELLENT[0] <= wpm <= PACE_EXCELLENT[1]: return 1.0
+    if PACE_GOOD[0]      <= wpm <= PACE_GOOD[1]:      return 0.75
+    if PACE_FAIR[0]      <= wpm <= PACE_FAIR[1]:       return 0.5
+    return 0.25
+
+
+def _filler_score(filler_count: int, word_count: int) -> float:
+    """
+    Rate-based (fillers per 100 words) so a long answer isn't
+    unfairly penalised for the same absolute count as a short one.
+    """
+    if word_count == 0:
         return 0.0
+    rate = (filler_count / word_count) * 100
+    if rate <= 1.0:  return 1.0    # ≤1 per 100 words: excellent
+    if rate <= 3.0:  return 0.75   # 1–3: good
+    if rate <= 6.0:  return 0.5    # 3–6: fair
+    if rate <= 10.0: return 0.25   # 6–10: poor
+    return 0.1                      # >10: very poor
 
-    sentence_endings = sum(1 for char in text if char in ".!?")
-    capitalized_words = sum(1 for token in tokens if token[:1].isupper())
 
-    score = 0.4
-    if sentence_endings >= 1:
-        score += 0.25
-    if len(tokens) >= 8:
-        score += 0.2
-    if capitalized_words >= 1:
-        score += 0.15
+def _pause_score(pause_count: int, duration_secs: float) -> float:
+    """
+    Rate-based (pauses per minute) so longer answers aren't
+    unfairly penalised. Neutral score when no audio is available.
+    """
+    if duration_secs <= 0:
+        return 0.5
+    rate = pause_count / (duration_secs / 60.0)
+    if rate <= 3:  return 1.0    # ≤3/min: natural
+    if rate <= 6:  return 0.75   # 3–6/min: acceptable
+    if rate <= 10: return 0.5    # 6–10/min: fair
+    if rate <= 15: return 0.25   # 10–15/min: poor
+    return 0.1                    # >15/min: very poor
 
-    return round(min(1.0, score), 2)
+
+def _count_fillers(tokens: list[str], text_lower: str) -> int:
+    """Handles both single-word and multi-word fillers correctly."""
+    count  = sum(1 for t in tokens if t in _FILLER_SINGLE)
+    count += sum(text_lower.count(p) for p in _FILLER_MULTI)
+    return count
 
 
 def score_transcript_audio(
     transcript: Optional[str],
     audio_path: Optional[str],
-    question_text: Optional[str] = None,
-    ideal_answer: Optional[str] = None,
-    keywords: Optional[str] = None,
 ) -> dict:
     transcript = (transcript or "").strip()
-    tokens = _normalize_text(transcript)
+    tokens     = _normalize_tokens(transcript)
     word_count = len(tokens)
 
     if not transcript:
         return {
-            "grammar_score": 0.0,
+            "grammar_score":    0.0,
             "confidence_score": 0.0,
-            "final_score": 0.0,
-            "speaking_speed": 0.0,
-            "pause_count": 0,
-            "filler_count": 0,
-            "llm_feedback": "No transcript detected.",
+            "final_score":      0.0,
+            "speaking_speed":   0.0,
+            "pause_count":      0,
+            "filler_count":     0,
+            "llm_feedback":     "No transcript detected.",
         }
 
-    duration = 0.0
-    pause_count = 0
-    filler_count = sum(1 for token in tokens if token in FILLER_WORDS)
-
+    # ── Audio analysis via librosa ────────────────────────────────────────────
+    duration_secs = 0.0
+    pause_count   = 0
     try:
         if audio_path:
-            audio_data, sample_rate = librosa.load(audio_path, sr=16000, mono=True)
-            duration = len(audio_data) / sample_rate if sample_rate else 0.0
-
-            if len(audio_data) > 0:
-                silence_intervals = librosa.effects.split(audio_data, top_db=25)
-                pause_count = max(0, len(silence_intervals) - 1)
+            y, sr = librosa.load(audio_path, sr=16000, mono=True)
+            duration_secs = len(y) / sr if sr else 0.0
+            if len(y) > 0:
+                # top_db=30: standard threshold; ignores breath/room noise
+                intervals = librosa.effects.split(y, top_db=30)
+                for i in range(1, len(intervals)):
+                    # only count pauses > 1 second as genuine hesitation
+                    # pauses < 1s are natural sentence/clause boundaries
+                    gap_secs = (intervals[i][0] - intervals[i - 1][1]) / sr
+                    if gap_secs >= 1.0:
+                        pause_count += 1
     except Exception:
-        duration = 0.0
-        pause_count = 0
+        duration_secs = 0.0
+        pause_count   = 0
 
-    speaking_speed = round(word_count / (duration / 60.0), 2) if duration > 0 else 0.0
+    # ── Sub-scores (all 0–1 internally) ──────────────────────────────────────
+    wpm          = round(word_count / (duration_secs / 60.0), 1) if duration_secs > 0 else 0.0
+    filler_count = _count_fillers(tokens, transcript.lower())
 
-    if 130 <= speaking_speed <= 150:
-        pace_score = 1.0
-    elif 129 <= speaking_speed <= 151:
-        pace_score = 0.8
-    elif 115 <= speaking_speed <= 181:
-        pace_score = 0.6
-    else:
-        pace_score = 0.3
+    grammar_s = _grammar_score(transcript)
+    pace_s    = _pace_score(wpm)
+    filler_s  = _filler_score(filler_count, word_count)
+    pause_s   = _pause_score(pause_count, duration_secs)
 
-    if pause_count <= 2:
-        pause_score = 1.0
-    elif pause_count <= 5:
-        pause_score = 0.8
-    elif pause_count <= 8:
-        pause_score = 0.6
-    else:
-        pause_score = 0.3
+    # ── Weighted confidence score → scaled to 0–100 ───────────────────────────
+    #   confidence = Σ (sub_score × weight) × 100
+    raw = (
+        grammar_s * WEIGHTS["grammar"] +
+        filler_s  * WEIGHTS["filler"]  +
+        pace_s    * WEIGHTS["pace"]    +
+        pause_s   * WEIGHTS["pause"]
+    )
+    confidence_score = round(raw * 100, 2)
+    grammar_score    = round(grammar_s * 100, 2)
 
-    if filler_count == 0:
-        filler_score = 1.0
-    elif filler_count <= 4:
-        filler_score = 0.8
-    elif filler_count <= 8:
-        filler_score = 0.6
-    else:
-        filler_score = 0.3
+    # ── Label & actionable feedback ───────────────────────────────────────────
+    if   confidence_score >= 85: label = "Excellent"
+    elif confidence_score >= 65: label = "Good"
+    elif confidence_score >= 45: label = "Fair"
+    else:                        label = "Poor"
 
-    grammar_score = _grammar_score(transcript)
-    confidence_score = round((pace_score * 0.25) + (pause_score * 0.25) + (filler_score * 0.25) + (grammar_score * 0.25), 2)
-    final_score = confidence_score
-
-    if confidence_score >= 0.8:
-        outcome = "Excellent"
-        feedback = "Strong confidence and delivery."
-    elif confidence_score >= 0.6:
-        outcome = "Good"
-        feedback = "Solid delivery with a few improvements needed."
-    elif confidence_score >= 0.4:
-        outcome = "Fair"
-        feedback = "Moderate confidence; improve pacing and reduce filler words."
-    else:
-        outcome = "Poor"
-        feedback = "Low confidence and delivery quality."
-
-    feedback_parts = [feedback]
+    tips = []
+    if wpm > 0 and not (PACE_EXCELLENT[0] <= wpm <= PACE_EXCELLENT[1]):
+        tips.append(
+            f"Speaking pace is {wpm:.0f} WPM — "
+            f"aim for {PACE_EXCELLENT[0]}–{PACE_EXCELLENT[1]} WPM."
+        )
     if filler_count > 0:
-        feedback_parts.append(f"Filler words detected: {filler_count}.")
-    if pause_count > 2:
-        feedback_parts.append("Frequent pauses may reduce fluency.")
+        rate = round((filler_count / word_count) * 100, 1)
+        tips.append(f"{filler_count} filler word(s) detected ({rate} per 100 words).")
+    if duration_secs > 0 and (pause_count / (duration_secs / 60.0)) > 3:
+        tips.append("Frequent hesitation pauses detected — practice smoother transitions between ideas.")
 
-    feedback_parts.append(f"Confidence outcome: {outcome}.")
+    feedback = f"Delivery: {label}. " + " ".join(tips) if tips else f"Delivery: {label}."
 
     return {
-        "grammar_score": grammar_score,
+        "grammar_score":    grammar_score,
         "confidence_score": confidence_score,
-        "final_score": final_score,
-        "speaking_speed": speaking_speed,
-        "pause_count": pause_count,
-        "filler_count": filler_count,
-        "llm_feedback": " ".join(feedback_parts),
+        "speaking_speed":   wpm,
+        "pause_count":      pause_count,
+        "filler_count":     filler_count,
+        "llm_feedback":     feedback,
     }
+
+
+
