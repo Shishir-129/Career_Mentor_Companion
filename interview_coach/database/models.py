@@ -30,6 +30,7 @@ class Questions(Base):
     question_text = Column(Text)
     ideal_answer = Column(Text)
     keywords = Column(Text)
+    expected_components = Column(Text, nullable=True)  # JSON array e.g. '["definition","example"]'
     code_expected = Column(Boolean, default=False)
     verified = Column(Boolean, default=False)
     times_asked = Column(Integer, default=0)

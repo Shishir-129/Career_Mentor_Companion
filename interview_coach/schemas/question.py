@@ -12,6 +12,7 @@ class QuestionCreate(BaseModel):
     question_text: Optional[str] = None
     ideal_answer: Optional[str] = None
     keywords: Optional[str] = None
+    expected_components: Optional[str] = None  # JSON array string, auto-filled if omitted
     code_expected: bool = False
     verified: bool = False
 
@@ -26,6 +27,7 @@ class QuestionResponse(BaseModel):
     question_text: Optional[str]
     ideal_answer: Optional[str]
     keywords: Optional[str]
+    expected_components: Optional[str]
     code_expected: bool
     verified: bool
     times_asked: int
