@@ -6,13 +6,25 @@ from bs4 import BeautifulSoup
 from database.connection import SessionLocal
 from crud.questions import create_question
 from schemas.question import QuestionCreate
-from services.keyword_extractor import extract_keywords   # ← ADD THIS
+from services.keyword_extractor import extract_keywords
 
 DIFFICULTY_MAP = {
     "👶": "easy",
     "⭐️": "medium",
     "‍⭐️": "medium",
     "🚀": "expert",
+}
+
+DIFFICULTY_TO_LEVEL = {
+    "easy":   "fresher",
+    "medium": "junior",
+    "expert": "senior",
+}
+
+DIFFICULTY_TO_QUESTION_TYPE = {
+    "easy":   "Theoretical",
+    "medium": "Technical",
+    "expert": "Technical",
 }
 
 def get_difficulty(text):
@@ -27,7 +39,6 @@ def scrape():
 
     questions = []
     current_topic = None
-    # Include ul and pre so bullet points and code blocks are captured
     all_tags = soup.find_all(["h2", "p", "ul", "pre"])
 
     i = 0
@@ -81,7 +92,8 @@ def scrape():
                     role="Data Scientist",
                     topic=current_topic,
                     difficulty=difficulty,
-                    question_type="theory",
+                    experience_level=DIFFICULTY_TO_LEVEL.get(difficulty, "junior"),
+                    question_type=DIFFICULTY_TO_QUESTION_TYPE.get(difficulty, "Theoretical"),
                     question_text=question_text,
                     ideal_answer=ideal_answer_text,
                     keywords=", ".join(extract_keywords(ideal_answer_text)),
@@ -97,7 +109,7 @@ def seed():
     for q in questions:
         create_question(db, q)
     db.close()
-    print(f"Seeded {len(questions)} questions.")
+    print(f" Seeded {len(questions)} questions.")
 
 if __name__ == "__main__":
     seed()

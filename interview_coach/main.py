@@ -1,8 +1,8 @@
 from pathlib import Path
-import shutil
 from uuid import uuid4
 
 from fastapi import Depends, FastAPI, File, Form, HTTPException, UploadFile
+from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 
 import librosa
@@ -22,13 +22,20 @@ Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="Interview Coach API")
 
+# ✅ CORS — allow React dev server
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 app.include_router(user_router)
 app.include_router(question_router)
 app.include_router(session_router)
 app.include_router(response_router)
 app.include_router(weak_areas.router)
-
 app.include_router(question_history.router)
 
 UPLOAD_DIR = Path("uploads")
@@ -79,9 +86,7 @@ async def upload_and_store_transcript(
 
 
 if __name__ == "__main__":
-    # Replace with the path to an audio file in your backend directory (e.g., .mp3, .wav)
-    audio_file = "sample.wav" 
-    
+    audio_file = "sample.wav"
     try:
         transcription = transcribe_audio(audio_file)
         print("\n--- Transcription Result ---")
