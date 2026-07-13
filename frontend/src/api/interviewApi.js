@@ -30,7 +30,15 @@ export const submitAudioResponse = async ({ sessionId, userId, questionId, quest
     formData.append("question_id", questionId);
     if (questionType) formData.append("question_type", questionType);
     if (topic) formData.append("topic", topic);
-    formData.append("audio_file", audioBlob, "answer.wav");
+
+    // Detect the actual MIME type and use the correct file extension
+    // Browser MediaRecorder records as audio/webm (not wav), so sending as .wav causes 500
+    const mimeType = audioBlob.type || "audio/webm";
+    const ext = mimeType.includes("wav") ? "wav"
+              : mimeType.includes("ogg") ? "ogg"
+              : mimeType.includes("mp4") ? "mp4"
+              : "webm";
+    formData.append("audio_file", audioBlob, `answer.${ext}`);
 
     const res = await axios.post(`${BASE_URL}/responses/upload-audio`, formData, {
         headers: { "Content-Type": "multipart/form-data" },

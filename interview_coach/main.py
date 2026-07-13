@@ -1,3 +1,4 @@
+import traceback
 from pathlib import Path
 from uuid import uuid4
 
@@ -72,17 +73,23 @@ async def upload_and_store_transcript(
     audio_file: UploadFile = File(...),
     db: Session = Depends(get_db),
 ):
-    return create_response_from_audio(
-        db=db,
-        audio_file=audio_file,
-        session_id=session_id,
-        user_id=user_id,
-        question_id=question_id,
-        question_type=question_type,
-        topic=topic,
-        upload_dir=UPLOAD_DIR,
-        transcribe_fn=transcribe_audio,
-    )
+    try:
+        return create_response_from_audio(
+            db=db,
+            audio_file=audio_file,
+            session_id=session_id,
+            user_id=user_id,
+            question_id=question_id,
+            question_type=question_type,
+            topic=topic,
+            upload_dir=UPLOAD_DIR,
+            transcribe_fn=transcribe_audio,
+        )
+    except HTTPException:
+        raise  # re-raise FastAPI HTTP exceptions as-is
+    except Exception as e:
+        traceback.print_exc()  # ← prints full traceback to terminal
+        raise HTTPException(status_code=500, detail=f"Internal error: {e}")
 
 
 if __name__ == "__main__":
