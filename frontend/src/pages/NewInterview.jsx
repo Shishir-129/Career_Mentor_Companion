@@ -1,11 +1,9 @@
 import Sidebar from "../components/Sidebar";
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import "./NewInterview.css";
 import {
     FiCode,
-    FiBarChart2,
-    FiLayers,
-    FiFeather,
     FiActivity,
     FiGlobe,
     FiBookOpen,
@@ -16,21 +14,39 @@ import {
 const JOB_ROLES = [
     { id: "data-analyst", label: "Data Analyst", icon: FiCode },
     { id: "data-scientist", label: "Data Scientist", icon: FiGlobe },
-    { id: "devops-engineer", label: "Devops Enginner", icon: FiActivity }
+    { id: "devops-engineer", label: "Devops Engineer", icon: FiActivity }
 ];
 
-const EXPERIENCE_LEVELS = ["0-2 Years", "3-5 Years", "6-8 Years", "9+ Years"];
-const DIFFICULTIES = ["Easy", "Medium", "Hard"];
-const INTERVIEW_TYPES = ["Technical", "Behavioral", "System Design", "Mixed"];
+const EXPERIENCE_LEVELS = [
+    { label: "0-1 Years (Fresher)", value: "fresher" },
+    { label: "1-3 Years (Junior)", value: "junior" },
+    { label: "3-5 Years (Mid)", value: "mid-level" },
+    { label: "5+ Years (Senior)", value: "senior" },
+];
 
+const DIFFICULTIES = ["Easy", "Medium", "Hard"];
+const INTERVIEW_TYPES = ["Technical", "Behavioral", "Theoretical", "Mixed"];
 
 export default function NewInterview() {
     const [role, setRole] = useState(null);
-    const [experience, setExperience] = useState("3-5 Years");
+    const [experience, setExperience] = useState("fresher");
     const [difficulty, setDifficulty] = useState("Medium");
     const [interviewType, setInterviewType] = useState("Technical");
 
+    const navigate = useNavigate();
     const canStart = Boolean(role);
+
+    const handleStart = () => {
+        if (!canStart) return;
+        navigate("/interview", {
+            state: {
+                role: role,
+                experience: experience,
+                difficulty: difficulty,
+                interviewType: interviewType,
+            },
+        });
+    };
 
     return (
         <div className="app-layout">
@@ -49,8 +65,8 @@ export default function NewInterview() {
                                 <button
                                     key={id}
                                     type="button"
-                                    className={`role-card ${role === id ? "selected" : ""}`}
-                                    onClick={() => setRole(id)}
+                                    className={`role-card ${role === label ? "selected" : ""}`}
+                                    onClick={() => setRole(label)}
                                 >
                                     <span className="role-icon">
                                         <Icon />
@@ -65,14 +81,9 @@ export default function NewInterview() {
                         <div className="config-col">
                             <h3 className="section-label">Experience Level</h3>
                             <div className="select-wrapper">
-                                <select
-                                    value={experience}
-                                    onChange={(e) => setExperience(e.target.value)}
-                                >
-                                    {EXPERIENCE_LEVELS.map((level) => (
-                                        <option key={level} value={level}>
-                                            {level}
-                                        </option>
+                                <select value={experience} onChange={(e) => setExperience(e.target.value)}>
+                                    {EXPERIENCE_LEVELS.map((l) => (
+                                        <option key={l.value} value={l.value}>{l.label}</option>
                                     ))}
                                 </select>
                                 <FiChevronDown className="select-caret" />
@@ -86,8 +97,7 @@ export default function NewInterview() {
                                     <button
                                         key={level}
                                         type="button"
-                                        className={`difficulty-btn ${difficulty === level ? "selected" : ""
-                                            }`}
+                                        className={`difficulty-btn ${difficulty === level ? "selected" : ""}`}
                                         onClick={() => setDifficulty(level)}
                                     >
                                         {level}
@@ -121,7 +131,7 @@ export default function NewInterview() {
                         <p>
                             <strong>Session Preview:</strong> 5 questions &middot;{" "}
                             {interviewType} focus &middot; {difficulty} difficulty &middot;{" "}
-                            {experience} level
+                            {EXPERIENCE_LEVELS.find(l => l.value === experience)?.label}
                         </p>
                     </div>
 
@@ -129,11 +139,7 @@ export default function NewInterview() {
                         type="button"
                         className="start-btn"
                         disabled={!canStart}
-                        onClick={() => {
-                            if (canStart) {
-                                // hook up navigation / session start here
-                            }
-                        }}
+                        onClick={handleStart}
                     >
                         <FiPlay /> Start Interview
                     </button>

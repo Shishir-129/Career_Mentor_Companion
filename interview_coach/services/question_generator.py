@@ -1,68 +1,64 @@
-from google import genai
 import json
 import os
+import random
 from dotenv import load_dotenv
 from sqlalchemy.orm import Session
 from database.models import Questions
 
 load_dotenv()
-client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
-
-# Map experience level → difficulty stored in DB
-LEVEL_TO_DIFFICULTY = {
-    "fresher": ["easy"],
-    "junior": ["easy", "medium"],
-    "mid-level": ["medium"],
-    "senior": ["medium", "expert"],
-}
 
 
 def get_questions_for_session(
     db: Session, role: str, level: str, interview_type: str, count: int = 5
 ) -> list:
-    difficulties = LEVEL_TO_DIFFICULTY.get(level.lower(), ["medium"])
 
-    # Pre-filter from DB by difficulty (keeps Gemini prompt small)
+    # ✅ Normalize inputs — DB stores "Theoretical", frontend might send "technical"
+    level = level.lower().strip()
+    interview_type = interview_type.strip()
+
+    # Filter 1: role + experience_level + question_type (best match)
     candidates = (
         db.query(Questions)
         .filter(
-            Questions.difficulty.in_(difficulties), Questions.question_text.isnot(None)
+            Questions.role == role,
+            Questions.experience_level == level,
+            Questions.question_text.isnot(None),
+            Questions.question_type.ilike(f"%{interview_type}%"),
         )
         .limit(60)
         .all()
     )
 
+    # Fallback 1: drop question_type filter
+    if not candidates:
+        candidates = (
+            db.query(Questions)
+            .filter(
+                Questions.role == role,
+                Questions.experience_level == level,
+                Questions.question_text.isnot(None),
+            )
+            .limit(60)
+            .all()
+        )
+
+    # Fallback 2: drop experience_level filter too
+    if not candidates:
+        candidates = (
+            db.query(Questions)
+            .filter(
+                Questions.role == role,
+                Questions.question_text.isnot(None),
+            )
+            .limit(60)
+            .all()
+        )
+
     if not candidates:
         return []
 
-    pool = [
-        {
-            "id": q.id,
-            "topic": q.topic,
-        }
-        for q in candidates
-    ]
+    if len(candidates) <= count:
+        return candidates
 
-    prompt = f"""You are an expert interview coach for Data Science roles.
-
-Candidate profile:
-- Job Role: {role}
-- Experience Level: {level}
-- Interview Type: {interview_type}
-
-From the question bank below, select exactly {count} questions most relevant 
-to this candidate's role and interview type. Prioritize topic fit for the role.
-
-Question bank:
-{json.dumps(pool, indent=2)}
-
-Return ONLY a JSON array of the selected question IDs (integers).
-Example: [3, 7, 15, 22, 41]"""
-
-    response = client.models.generate_content(
-        model="gemini-2.5-flash",
-        contents=prompt,
-        config={"response_mime_type": "application/json"},
-    )
-    selected_ids = set(json.loads(response.text))
-    return [q for q in candidates if q.id in selected_ids]
+    # ✅ Random sample — no Gemini needed
+    return random.sample(candidates, count)

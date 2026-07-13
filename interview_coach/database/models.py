@@ -26,6 +26,7 @@ class Questions(Base):
     topic = Column(String(100))
     subtopic = Column(String(100))
     difficulty = Column(String(20))
+    experience_level = Column(String(20))
     question_type = Column(String(30), nullable=False)
     question_text = Column(Text)
     ideal_answer = Column(Text)
