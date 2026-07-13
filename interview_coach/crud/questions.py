@@ -1,12 +1,20 @@
 from sqlalchemy.orm import Session
 from database.models import Questions
 from schemas.question import QuestionCreate, QuestionResponse
+from services.components_generator import generate_expected_components
 
 from typing import Optional
 from datetime import datetime
 
 def create_question(db: Session, question: QuestionCreate):
     db_question = Questions(**question.model_dump())
+
+    # Auto-generate expected_components from ideal_answer if not already provided
+    if not db_question.expected_components and db_question.ideal_answer:
+        db_question.expected_components = generate_expected_components(
+            db_question.ideal_answer
+        )
+
     db.add(db_question)
     db.commit()
     db.refresh(db_question)
