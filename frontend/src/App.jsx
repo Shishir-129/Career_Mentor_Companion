@@ -1,3 +1,14 @@
+<<<<<<< HEAD
+import { Routes, Route } from "react-router-dom";
+import NewInterview from "./pages/NewInterview";
+
+
+export default function App() {
+  return (
+    <Routes>
+        <Route path="/new-interview" element={<NewInterview />} />
+    </Routes>
+=======
 import { BrowserRouter as Router, Routes, Route, Link, useNavigate } from 'react-router-dom';
 import './App.css';
 import Dashboard from './Dashboard.jsx';
@@ -106,5 +117,6 @@ export default function App() {
         <Route path="/dashboard" element={<Dashboard />} />
       </Routes>
     </Router>
+>>>>>>> main
   );
 }
