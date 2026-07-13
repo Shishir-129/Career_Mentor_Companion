@@ -1,13 +1,26 @@
-import './App.css'
+import { BrowserRouter as Router, Routes, Route, Link, useNavigate } from 'react-router-dom';
+import './App.css';
+import Dashboard from './Dashboard.jsx';
 
-function App() {
+function Home() {
+  // Use React Router's navigation hook to change pages programmatically
+  const navigate = useNavigate();
+
+  const handleSignIn = (event) => {
+    // Prevent the default browser page reload behavior
+    event.preventDefault(); 
+    
+    // Bypass authentication and send the user directly to the dashboard
+    navigate('/dashboard'); 
+  };
+
   return (
     <div className="app-shell">
       <header className="topbar">
         <div className="brand">Career Mentor Companion</div>
         <nav className="nav-links">
           <a href="#interview">Interview</a>
-          <a href="#dashboard">Dashboard</a>
+          <Link to="/dashboard">Dashboard</Link>
           <a href="#blog">Blog</a>
           <a href="#about">About us</a>
           <a href="#signin" className="sign-in-link">
@@ -48,11 +61,6 @@ function App() {
           <p>Practice real interview questions and improve your answers.</p>
         </section>
 
-        <section id="dashboard" className="section-card">
-          <h2>Dashboard</h2>
-          <p>View your progress, sessions, and performance in one place.</p>
-        </section>
-
         <section id="blog" className="section-card">
           <h2>Blog</h2>
           <p>Read short articles on interviews, resumes, and career growth.</p>
@@ -66,7 +74,9 @@ function App() {
         <section id="signin" className="section-card signin-card">
           <h2>Sign In</h2>
           <p>Use your account details to access your interview dashboard and progress.</p>
-          <form className="signin-form">
+          
+          {/* Added onSubmit handler here */}
+          <form className="signin-form" onSubmit={handleSignIn}>
             <div className="form-group">
               <label htmlFor="email">Email address</label>
               <input id="email" name="email" type="email" placeholder="you@example.com" required />
@@ -75,6 +85,7 @@ function App() {
               <label htmlFor="password">Password</label>
               <input id="password" name="password" type="password" placeholder="Enter your password" required />
             </div>
+            {/* Keeping type="submit" so input validation rules still work */}
             <button type="submit" className="signin-button">
               Sign In
             </button>
@@ -84,7 +95,16 @@ function App() {
 
       <footer className="footer">© 2026 Career Mentor Companion</footer>
     </div>
-  )
+  );
 }
 
-export default App
+export default function App() {
+  return (
+    <Router>
+      <Routes>
+        <Route path="/" element={<Home />} />
+        <Route path="/dashboard" element={<Dashboard />} />
+      </Routes>
+    </Router>
+  );
+}
