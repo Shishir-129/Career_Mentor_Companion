@@ -1,0 +1,43 @@
+.settings-wrapper {
+    padding: 2rem;
+    max-width: 500px;
+}
+
+.settings-title {
+    font-size: 1.75rem;
+    font-weight: 700;
+    margin: 0;
+}
+
+.settings-subtitle {
+    color: #6b7280;
+    margin-top: 0.25rem;
+}
+
+.settings-form {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    margin-top: 1.5rem;
+}
+
+.settings-form label {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    font-weight: 600;
+    font-size: 0.9rem;
+}
+
+.settings-input {
+    width: 100%;
+    padding: 0.5rem 0.75rem;
+    border: 1px solid #d1d5db;
+    border-radius: 0.5rem;
+    font-size: 0.95rem;
+}
+
+.settings-input:focus {
+    outline: none;
+    border-color: #2563eb;
+}

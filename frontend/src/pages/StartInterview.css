@@ -3,6 +3,14 @@
     box-sizing: border-box;
 }
 
+/* If Sidebar is position:fixed, .app-layout needs to reserve space for it so
+   content doesn't render underneath it. Adjust the 280px value to match your
+   actual sidebar width if it differs. */
+.app-layout {
+    display: flex;
+    min-height: 100vh;
+}
+
 .si-wrapper {
     flex: 1;
     min-width: 0;
@@ -12,7 +20,22 @@
     color: #fff;
     max-width: 1400px;
     margin: 0 auto;
+    margin-left: 280px; /* reserve space if Sidebar is fixed-position */
     overflow-x: hidden;
+}
+
+/* If Sidebar is NOT position:fixed (i.e. already a normal flex item that
+   takes up its own width), delete the margin-left rule above — flexbox
+   will already be placing .si-wrapper correctly and the offset would
+   double up, pushing content too far right. */
+
+@media (max-width: 900px) {
+    .app-layout {
+        flex-direction: column; /* sidebar becomes static and stacks above content */
+    }
+    .si-wrapper {
+        margin-left: 0; /* sidebar is no longer fixed at this width, no offset needed */
+    }
 }
 
 .si-center {

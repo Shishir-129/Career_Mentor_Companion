@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
+from statistics import mean
 
 from schemas.session import SessionCreate, SessionResponse, SessionEnd
 from crud.sessions import (
@@ -11,13 +12,91 @@ from crud.sessions import (
     delete_session
 )
 from database.connection import get_db
+from database.models import Sessions, Responses
 
 router = APIRouter(prefix="/sessions", tags=["Sessions"])
+
+
+def calculate_average(values):
+    """Calculate average of a list, filtering out None values"""
+    valid_values = [v for v in values if v is not None]
+    return round(mean(valid_values), 2) if valid_values else 0
+
+
+def calculate_overall_score(scores_dict):
+    """Calculate weighted overall score from individual metrics"""
+    # Weights: Give more importance to answer quality and confidence
+    weights = {
+        'answer_quality_avg': 0.30,
+        'semantic_avg': 0.20,
+        'keyword_avg': 0.15,
+        'completeness_avg': 0.15,
+        'confidence_avg': 0.15,
+        'grammar_avg': 0.05,
+    }
+    
+    overall = 0
+    for metric, weight in weights.items():
+        if scores_dict.get(metric, 0) > 0:
+            overall += scores_dict[metric] * weight
+    
+    return round(overall, 2)
 
 
 @router.post("/", response_model=SessionResponse)
 def start_session(session: SessionCreate, db: Session = Depends(get_db)):
     return create_session(db, session)
+
+
+@router.get("/user/{user_id}/history")
+def get_user_sessions(user_id: int, db: Session = Depends(get_db)):
+    """Get all sessions for a user with aggregated scores and overall score"""
+    try:
+        sessions = db.query(Sessions).filter(Sessions.user_id == user_id).all()
+        
+        if not sessions:
+            return []
+        
+        result = []
+        for session in sessions:
+            # Get all responses for this session
+            responses = db.query(Responses).filter(
+                Responses.session_id == session.id
+            ).all()
+            
+            if not responses:
+                continue
+            
+            # Calculate aggregated scores
+            scores = {
+                'answer_quality_avg': calculate_average([r.answer_quality_score for r in responses]),
+                'semantic_avg': calculate_average([r.semantic_score for r in responses]),
+                'keyword_avg': calculate_average([r.keyword_score for r in responses]),
+                'completeness_avg': calculate_average([r.completeness_score for r in responses]),
+                'confidence_avg': calculate_average([r.confidence_score for r in responses]),
+                'grammar_avg': calculate_average([r.grammar_score for r in responses]),
+            }
+            
+            # Calculate overall score
+            overall_score = calculate_overall_score(scores)
+            
+            result.append({
+                'session_id': session.id,
+                'role': session.role,
+                'completed': session.completed,
+                'started_at': session.started_at,
+                'ended_at': session.ended_at,
+                'responses_count': len(responses),
+                'overall_score': overall_score,
+                'scores': scores
+            })
+        
+        # Sort by started_at descending (newest first)
+        result.sort(key=lambda x: x['started_at'], reverse=True)
+        return result
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error fetching sessions: {str(e)}")
 
 
 @router.get("/", response_model=list[SessionResponse])

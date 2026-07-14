@@ -1,5 +1,6 @@
 import { NavLink } from "react-router-dom";
 import './Sidebar.css';
+import { CURRENT_USER } from "../config/user";
 
 import {
     FiGrid,
@@ -22,7 +23,7 @@ export default function Sidebar() {
             </div>
 
             <nav>
-                <NavLink to='/' className='nav-item'>
+                <NavLink to='/dashboard' className='nav-item'>
                     <FiGrid /> Dashboard
                 </NavLink>
 
@@ -68,11 +69,11 @@ export default function Sidebar() {
             </nav>
 
             <div className="user-card">
-                <div className="avatar">SP</div>
+                <div className="avatar">{CURRENT_USER.initials}</div>
 
                 <div>
-                    <strong>Sunil Paudel</strong>
-                    <p>Data Engineer</p>
+                    <strong>{CURRENT_USER.name}</strong>
+                    <p>{CURRENT_USER.role}</p>
                 </div>
             </div>
 

@@ -41,6 +41,6 @@ def compute_semantic_score(user_answer: str, ideal_answer: str) -> dict:
     similarity = util.cos_sim(user_embedding, ideal_embedding).item()
 
     # Cosine similarity range is [-1, 1]; clamp to [0, 1] then scale to 100
-    score = round(max(0.0, similarity) * 100, 2)
+    score = round(max(0.0, similarity) *100, 2)
 
     return {"score": score, "label": get_semantic_label(score)}
