@@ -1,7 +1,8 @@
+// frontend/src/pages/StartInterview.jsx
 import { useState, useRef, useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import Sidebar from "../components/Sidebar";
-import { createSession, getQuestionsForSession, submitAudioResponse } from "../api/interviewApi";
+import { createSession, getQuestionsForSession, submitAudioResponse, completeSession } from "../api/interviewApi";
 import { FiMic, FiSquare, FiChevronRight } from "react-icons/fi";
 import "./StartInterview.css";
 
@@ -31,6 +32,7 @@ export default function StartInterview() {
 
     const [timer, setTimer] = useState(0);
     const timerRef = useRef(null);
+    const completedRef = useRef(false); // ✅ Track if session completion has been called
 
     const userId = 1;
 
@@ -67,6 +69,24 @@ export default function StartInterview() {
         }
         return () => clearInterval(timerRef.current);
     }, [recording]);
+
+    // ✅ Mark session as completed when interview finishes
+    useEffect(() => {
+        const markComplete = async () => {
+            if (sessionId && !completedRef.current) {
+                try {
+                    completedRef.current = true;
+                    await completeSession(sessionId);
+                } catch (err) {
+                    console.error("Error marking session complete:", err);
+                }
+            }
+        };
+
+        if (done) {
+            markComplete();
+        }
+    }, [done, sessionId]);
 
     const formatTime = (s) =>
         `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
@@ -179,14 +199,67 @@ export default function StartInterview() {
     );
 
     if (done) return (
-        <div className="app-layout"><Sidebar />
+        <div className="app-layout">
+            <Sidebar />
             <div className="si-wrapper si-center">
                 <div className="complete-card">
-                    <h1>🎉 Session Complete!</h1>
-                    <p>You answered all {questions.length} questions for <strong>{role}</strong>.</p>
-                    <button className="si-btn-primary" onClick={() => navigate("/new-interview")}>
-                        Start New Interview
-                    </button>
+                    <h1 style={{ fontSize: "2.5rem", marginBottom: "1rem" }}>
+                        🎉 Session Complete!
+                    </h1>
+                    
+                    <div style={{
+                        background: "#f0f9ff",
+                        border: "2px solid #bfdbfe",
+                        borderRadius: "0.75rem",
+                        padding: "1.5rem",
+                        marginBottom: "1.5rem",
+                        textAlign: "left",
+                    }}>
+                        <p style={{ margin: "0 0 0.5rem 0", fontSize: "0.95rem", color: "#666" }}>
+                            <strong>Role:</strong> {role}
+                        </p>
+                        <p style={{ margin: "0 0 0.5rem 0", fontSize: "0.95rem", color: "#666" }}>
+                            <strong>Questions Answered:</strong> {questions.length}
+                        </p>
+                        <p style={{ margin: "0", fontSize: "0.95rem", color: "#666" }}>
+                            <strong>Interview Type:</strong> {interviewType}
+                        </p>
+                    </div>
+
+                    <p style={{ fontSize: "1rem", color: "#333", marginBottom: "2rem" }}>
+                        Great job! Your session has been saved to your dashboard.
+                    </p>
+
+                    <div style={{
+                        display: "flex",
+                        gap: "1rem",
+                        justifyContent: "center",
+                        flexWrap: "wrap",
+                    }}>
+                        <button
+                            className="si-btn-primary"
+                            onClick={() => navigate("/dashboard")}
+                            style={{
+                                padding: "0.75rem 2rem",
+                                fontSize: "1rem",
+                            }}
+                        >
+                            📊 View Dashboard
+                        </button>
+                        <button
+                            className="si-btn-secondary"
+                            onClick={() => navigate("/new-interview")}
+                            style={{
+                                padding: "0.75rem 2rem",
+                                fontSize: "1rem",
+                                background: "#f3f4f6",
+                                color: "#1a1a1a",
+                                border: "2px solid #d1d5db",
+                            }}
+                        >
+                            ➕ New Interview
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>
@@ -368,9 +441,12 @@ export default function StartInterview() {
 }
 
 function ScoreBox({ label, value }) {
-    if (value == null) return null;
-    const pct = Math.round(value * 100);
+    if (value == null || value === 0) return null;
+    
+    // ✅ FIX: Backend returns 0-100, don't multiply again!
+    const pct = Math.round(value);
     const color = pct >= 70 ? "#4ade80" : pct >= 40 ? "#facc15" : "#f87171";
+    
     return (
         <div className="si-score-box">
             <div className="si-score-value" style={{ color }}>{pct}%</div>

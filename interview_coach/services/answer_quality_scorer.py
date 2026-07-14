@@ -81,7 +81,7 @@ def compute_answer_quality_score(
         "semantic_score":       semantic_score,
         "keyword_score":        round(keyword_score, 2),
         "completeness_score":   completeness_score,
-        "missed_keywords":      missed_keywords,+
+        "missed_keywords":      missed_keywords,
         "components_missing":   comp["components_missing"],
         "coaching_tips":        comp["coaching_tips"],
     }

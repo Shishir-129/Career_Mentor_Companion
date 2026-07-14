@@ -1,3 +1,4 @@
+// frontend/src/api/interviewApi.js
 import axios from "axios";
 
 const BASE_URL = "http://127.0.0.1:8000";
@@ -31,8 +32,6 @@ export const submitAudioResponse = async ({ sessionId, userId, questionId, quest
     if (questionType) formData.append("question_type", questionType);
     if (topic) formData.append("topic", topic);
 
-    // Detect the actual MIME type and use the correct file extension
-    // Browser MediaRecorder records as audio/webm (not wav), so sending as .wav causes 500
     const mimeType = audioBlob.type || "audio/webm";
     const ext = mimeType.includes("wav") ? "wav"
               : mimeType.includes("ogg") ? "ogg"
@@ -44,4 +43,22 @@ export const submitAudioResponse = async ({ sessionId, userId, questionId, quest
         headers: { "Content-Type": "multipart/form-data" },
     });
     return res.data;
+};
+
+// ✅ PATCH /sessions/{session_id}/end — mark session as completed
+export const completeSession = async (sessionId) => {
+    try {
+        const res = await axios.patch(
+            `${BASE_URL}/sessions/${sessionId}/end`,
+            {
+                total_questions: 5,
+                answered: 5,
+                completed: true,
+            }
+        );
+        return res.data;
+    } catch (err) {
+        console.error("Error completing session:", err);
+        throw err;
+    }
 };
