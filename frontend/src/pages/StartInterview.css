@@ -329,12 +329,59 @@
     word-break: break-word;
 }
 
+.si-fb-block ul {
+    margin: 0;
+    padding-left: 20px;
+    color: #aaa;
+    line-height: 1.6;
+}
+
+.si-fb-block li {
+    margin-bottom: 8px;
+}
+
 .si-fb-block.green h4 {
     color: #4ade80;
 }
 
 .si-fb-block.orange h4 {
     color: #fb923c;
+}
+
+/* ── Collapsible score details ──────────────────────────────────────────── */
+.si-score-details {
+    margin-bottom: 16px;
+    background: #0f1117;
+    border: 1px solid #2a2d3e;
+    border-radius: 8px;
+    padding: 12px;
+}
+
+.si-score-details summary {
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 600;
+    color: #aaa;
+    user-select: none;
+    padding: 4px;
+    margin: -4px;
+    border-radius: 4px;
+    transition: background 0.2s ease, color 0.2s ease;
+}
+
+.si-score-details summary:hover {
+    background: #1a1d2e;
+    color: #fff;
+}
+
+.si-score-details[open] summary {
+    margin-bottom: 12px;
+    color: #fff;
+}
+
+.si-score-details .si-score-grid {
+    margin-bottom: 0;
+    margin-top: 12px;
 }
 
 .si-fb-row {
