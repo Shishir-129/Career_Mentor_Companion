@@ -70,45 +70,57 @@ def compute_completeness_score(
     is dropped — we never penalise the user for something the reference
     answer doesn't cover either.
     """
-    answer_lower = user_answer.lower() if user_answer else ""
-    word_count = len(answer_lower.split()) if answer_lower.strip() else 0
+    try:
+        answer_lower = user_answer.lower() if user_answer else ""
+        word_count = len(answer_lower.split()) if answer_lower.strip() else 0
 
-    # ── Resolve which components the ideal answer actually covers ───────────
-    expected = _parse_expected(expected_components_json)
-    if expected and ideal_answer and ideal_answer.strip():
-        ideal_lower = ideal_answer.lower()
-        verified_found, _ = _detect_components(ideal_lower, expected)
-        # Only keep components the ideal answer itself demonstrates
-        expected = verified_found
+        # ── Resolve which components the ideal answer actually covers ───────────
+        expected = _parse_expected(expected_components_json)
+        if expected and ideal_answer and ideal_answer.strip():
+            ideal_lower = ideal_answer.lower()
+            verified_found, _ = _detect_components(ideal_lower, expected)
+            # Only keep components the ideal answer itself demonstrates
+            expected = verified_found
 
-    # ── Edge case: no expected_components (or none verified in ideal) ───────
-    if not expected:
-        score = 100.0 if word_count >= 3 else 20.0
+        # ── Edge case: no expected_components (or none verified in ideal) ───────
+        if not expected:
+            score = 100.0 if word_count >= 3 else 20.0
+            return {
+                "completeness_score": score,
+                "components_found": [],
+                "components_missing": [],
+                "coaching_tips": [],
+            }
+
+        # ── Edge case: empty user answer ────────────────────────────────────────
+        if not answer_lower.strip():
+            return {
+                "completeness_score": 0.0,
+                "components_found": [],
+                "components_missing": expected,
+                "coaching_tips": [COACHING_TIPS.get(c, "") for c in expected],
+            }
+
+        found, missing = _detect_components(answer_lower, expected)
+        score = round((len(found) / len(expected)) * 100, 2)
+
         return {
             "completeness_score": score,
+            "components_found": found,
+            "components_missing": missing,
+            "coaching_tips": [COACHING_TIPS.get(c, "") for c in missing],
+        }
+    except Exception as e:
+        print(f"❌ Completeness scoring error: {type(e).__name__}: {e}")
+        import traceback
+        traceback.print_exc()
+        # Return safe default on error
+        return {
+            "completeness_score": 50.0,
             "components_found": [],
             "components_missing": [],
             "coaching_tips": [],
         }
-
-    # ── Edge case: empty user answer ────────────────────────────────────────
-    if not answer_lower.strip():
-        return {
-            "completeness_score": 0.0,
-            "components_found": [],
-            "components_missing": expected,
-            "coaching_tips": [COACHING_TIPS.get(c, "") for c in expected],
-        }
-
-    found, missing = _detect_components(answer_lower, expected)
-    score = round((len(found) / len(expected)) * 100, 2)
-
-    return {
-        "completeness_score": score,
-        "components_found": found,
-        "components_missing": missing,
-        "coaching_tips": [COACHING_TIPS.get(c, "") for c in missing],
-    }
 
 
 def _parse_expected(raw: str | None) -> list[str]:

@@ -1,7 +1,13 @@
 from sentence_transformers import SentenceTransformer, util
 
-# Load model once at module level to avoid reloading on every request
+# Load model once at module level — cached in RAM for reuse
 _model = SentenceTransformer("all-MiniLM-L6-v2")
+
+
+def get_model():
+    """Return the cached sentence-transformers model."""
+    return _model
+
 
 # Score interpretation thresholds
 EXCELLENT_THRESHOLD = 85
@@ -41,6 +47,6 @@ def compute_semantic_score(user_answer: str, ideal_answer: str) -> dict:
     similarity = util.cos_sim(user_embedding, ideal_embedding).item()
 
     # Cosine similarity range is [-1, 1]; clamp to [0, 1] then scale to 100
-    score = round(max(0.0, similarity) *100, 2)
+    score = round(max(0.0, similarity) * 100, 2)
 
     return {"score": score, "label": get_semantic_label(score)}

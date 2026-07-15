@@ -1,73 +1,192 @@
 # Interview Coach API
 
-A REST API built with FastAPI and PostgreSQL (Neon).
+An AI-powered interview coaching system with real-time audio processing, transcription, and intelligent feedback generation.
 
 ---
 
+## ⚠️ CRITICAL: Python 3.12.10 REQUIRED
+
+This project **MUST** use **Python 3.12.10**. Older versions (Python 3.14) cause PyTorch crashes at the C++ level.
+
 ## Requirements
 
-- Python 3.10+
+- **Python 3.12.10** (NOT 3.13, NOT 3.14, NOT 3.10)
 - PostgreSQL database (Neon or local)
+- Node.js 18+ (for frontend)
+- ~2GB disk space for ML models
 
 ---
 
 ## Installation
 
-### 1. Clone the repository
+### 1. Install Python 3.12.10
+
+**Windows:**
+```powershell
+# Using winget
+winget install Python.Python.3.12
+
+# Verify installation
+python3.12 --version  # Should output: Python 3.12.10
+```
+
+**macOS:**
+```bash
+# Using Homebrew
+brew install python@3.12
+
+# Verify
+python3.12 --version
+```
+
+### 2. Clone and navigate to project
 
 ```bash
 git clone <your-repo-url>
 cd interview_coach
 ```
 
-### 2. Create and activate a virtual environment
+### 3. Create and activate virtual environment
 
 ```bash
 # Create
-python -m venv venv
+python3.12 -m venv venv_py312
 
 # Activate (Windows)
-venv\Scripts\activate
+.\venv_py312\Scripts\Activate.ps1
 
-# Activate (Mac/Linux)
-source venv/bin/activate
+# Activate (macOS/Linux)
+source venv_py312/bin/activate
+
+# Activate (macOS/Linux)
+source venv_py312/bin/activate
 ```
 
-### 3. Install dependencies
+### 4. Install dependencies
 
 ```bash
+pip install --upgrade pip setuptools wheel
 pip install -r requirements.txt
 ```
 
-### 4. Set up environment variables
+**Note:** First time installation will download ML models (~540MB). This takes 5-10 minutes.
 
-Create a `.env` file in the root directory:
+### 5. Configure environment variables
 
-```env
-DATABASE_URL=postgresql://user:password@host/dbname
+Copy the environment template:
+```bash
+cp interview_coach/.env.example interview_coach/.env
 ```
 
-Replace with your actual Neon (or local PostgreSQL) connection string.
+Edit `.env` with your settings:
+```env
+DATABASE_URL=postgresql://user:password@host/dbname
+DEBUG=False
+```
 
 ---
 
-## Requirements.txt
+## Quick Start
 
-```
-fastapi
-uvicorn
-sqlalchemy
-psycopg2-binary
-pydantic[email]
-pwdlib[argon2]
-python-dotenv
+### Start Backend (FastAPI)
+
+```powershell
+# Windows
+cd interview_coach
+.\venv_py312\Scripts\python.exe -m uvicorn main:app --host 127.0.0.1 --port 8000 --reload
 ```
 
-Generate it with:
+Backend: http://localhost:8000
+Docs: http://localhost:8000/docs
+
+### Start Frontend (React + Vite)
 
 ```bash
-pip freeze > requirements.txt
+# In new terminal
+cd frontend
+npm install
+npm run dev
 ```
+
+Frontend: http://localhost:5174
+
+---
+
+## Detailed Documentation
+
+- **Backend Setup:** [interview_coach/README_BACKEND.md](interview_coach/README_BACKEND.md)
+- **Frontend Setup:** [frontend/README.md](frontend/README.md)
+
+---
+
+## 📦 Project Structure
+
+```
+.
+├── interview_coach/          # FastAPI backend
+│   ├── main.py              # App entry point
+│   ├── requirements.txt      # Python dependencies
+│   ├── README_BACKEND.md    # Detailed backend docs
+│   ├── .env.example         # Environment template
+│   ├── .python-version      # Python 3.12 requirement
+│   ├── crud/                # Database operations
+│   ├── database/            # SQLAlchemy models
+│   ├── routers/             # API endpoints
+│   ├── schemas/             # Pydantic models
+│   └── services/            # ML services
+│
+├── frontend/                # React + Vite
+│   ├── src/
+│   ├── package.json
+│   └── README.md
+│
+└── README.md               # This file
+```
+
+---
+
+## Troubleshooting
+
+### Python Version Error
+
+```powershell
+# If you see "python3.12 not found"
+python --version  # Check your current version
+
+# Install Python 3.12
+winget install Python.Python.3.12
+```
+
+### "ERR_CONNECTION_RESET" on audio upload
+
+This means Python 3.14+ is running. Switch to Python 3.12:
+
+```powershell
+.\venv_py312\Scripts\python.exe -m uvicorn main:app --reload
+```
+
+### Models download very slowly
+
+- **First run:** 5-10 minutes (normal, downloads 540MB of models)
+- **Cached:** Models load from RAM on subsequent requests
+- Check disk space: needs ~2GB free
+
+### Database connection fails
+
+1. Verify DATABASE_URL in `.env`
+2. Check PostgreSQL is running (or Neon is accessible)
+3. Try local test: `psql -U user -d dbname -h localhost`
+
+---
+
+## Development Notes
+
+- **Python version required:** 3.12.10 (enforced via .python-version)
+- **Virtual environment:** venv_py312
+- **Backend:** FastAPI + Uvicorn + SQLAlchemy
+- **Frontend:** React 19 + Vite
+- **Database:** PostgreSQL (Neon)
+- **ML Models:** Whisper, sentence-transformers, FLAN-T5, spaCy
 
 ---
 
