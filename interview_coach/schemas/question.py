@@ -39,7 +39,8 @@ class QuestionResponse(BaseModel):
 
         
 class SessionRequest(BaseModel):
-    role: str           # "Data Engineer"
+    role: str           # "Data Analyst" | "Data Scientist" | ...
     level: str          # "fresher" | "junior" | "mid-level" | "senior"
-    interview_type: str # "technical" | "hr"
+    interview_type: str # "Technical" | "Behavioral" | "Theoretical" | "Mixed"
+    difficulty: str = "Medium"  # "Easy" | "Medium" | "Hard"
     count: int = 5

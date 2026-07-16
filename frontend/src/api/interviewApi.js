@@ -1,9 +1,20 @@
-// frontend/src/api/interviewApi.js
 import axios from "axios";
+import { BASE_URL } from "./config";
 
-const BASE_URL = "http://127.0.0.1:8000";
+// ── Auth ──────────────────────────────────────────────────────────────────────
+export const loginUser = async (email, password) => {
+    const res = await axios.post(`${BASE_URL}/users/login`, { email, password });
+    return res.data;
+};
 
-// POST /sessions/ — create a new interview session
+export const registerUser = async (fullname, email, password, target_role) => {
+    const res = await axios.post(`${BASE_URL}/users/register`, {
+        fullname, email, password, target_role,
+    });
+    return res.data;
+};
+
+// ── Sessions ──────────────────────────────────────────────────────────────────
 export const createSession = async (userId, role) => {
     const res = await axios.post(`${BASE_URL}/sessions/`, {
         user_id: userId,
@@ -12,13 +23,14 @@ export const createSession = async (userId, role) => {
     return res.data;
 };
 
-// POST /questions/for-session — fetch questions matching role + level
-export const getQuestionsForSession = async (role, level, interviewType, count = 5) => {
+// POST /questions/for-session — fetch questions matching role + level + difficulty
+export const getQuestionsForSession = async (role, level, interviewType, difficulty, count = 5) => {
     const res = await axios.post(`${BASE_URL}/questions/for-session`, {
-        role: role,
-        level: level,
+        role,
+        level,
         interview_type: interviewType,
-        count: count,
+        difficulty,
+        count,
     });
     return res.data;
 };

@@ -1,52 +1,226 @@
-# Interview Coach API
+# Interview Coach
 
-An AI-powered interview coaching system with real-time audio processing, transcription, and intelligent feedback generation.
-
----
-
-## ⚠️ CRITICAL: Python 3.12.10 REQUIRED
-
-This project **MUST** use **Python 3.12.10**. Older versions (Python 3.14) cause PyTorch crashes at the C++ level.
-
-## Requirements
-
-- **Python 3.12.10** (NOT 3.13, NOT 3.14, NOT 3.10)
-- PostgreSQL database (Neon or local)
-- Node.js 18+ (for frontend)
-- ~2GB disk space for ML models
+An AI-powered mock interview platform for Data Science roles. Candidates select a role and experience level, answer spoken questions, and receive instant scoring and coaching feedback on both **content quality** and **delivery confidence**.
 
 ---
 
-## Installation
+## Project Structure
 
-### 1. Install Python 3.12.10
+```
+minor_project/
+├── frontend/                   # React + Vite frontend
+│   └── src/
+│       ├── api/
+│       │   ├── config.js       # Shared BASE_URL and USER_ID constants
+│       │   └── interviewApi.js # All API calls in one place
+│       ├── components/
+│       │   └── Sidebar.jsx     # Navigation sidebar
+│       ├── config/
+│       │   └── user.js         # Current user profile (Settings page)
+│       └── pages/
+│           ├── NewInterview    # Configure role, level, type
+│           ├── StartInterview  # Record answers, view per-question feedback
+│           ├── Dashboard       # Scores, performance charts, radar chart
+│           ├── History         # All past sessions with filter
+│           ├── WeakAreas       # Low-scoring topics with improvement tips
+│           └── Settings        # Edit name/role/initials
+│
+└── interview_coach/            # FastAPI backend
+    ├── main.py                 # App entry point, Whisper transcription
+    ├── database/
+    │   ├── connection.py       # SQLAlchemy engine & session
+    │   └── models.py           # User, Questions, Sessions, Responses, WeakArea
+    ├── routers/                # API route handlers (one file per resource)
+    ├── crud/                   # Database operations (one file per model)
+    ├── schemas/                # Pydantic request/response models
+    ├── services/               # AI scoring & feedback logic
+    │   ├── semantic_score.py       # Sentence-transformers cosine similarity
+    │   ├── keyword_score.py        # spaCy lemmatized keyword matching
+    │   ├── completeness_score.py   # Structural component detection
+    │   ├── answer_quality_scorer.py # Aggregates above three (50/30/20 weights)
+    │   ├── confidence_scoring.py   # Grammar, pace, fillers, pauses via librosa
+    │   ├── feedback_generator.py   # FLAN-T5 narrative coaching tips
+    │   ├── question_generator.py   # Fetches questions for a session
+    │   ├── keyword_extractor.py    # KeyBERT extraction (used by seed scripts)
+    │   └── components_generator.py # Detects expected components (used by seeds)
+    └── scripts/                # One-time DB utilities (seed, migrate, check)
+```
 
-**Windows:**
+---
+
+## How It Works
+
+```
+User records answer (browser mic)
+        │
+        ▼
+POST /responses/upload-audio
+        │
+        ├─── [parallel] ─── Whisper (speech → text)
+        │                   Librosa (audio duration + pause detection)
+        │
+        ├─── Answer Quality (70% of final)
+        │       ├─ Semantic score    50%  (sentence-transformers vs ideal answer)
+        │       ├─ Keyword score     30%  (spaCy lemmatized keyword matching)
+        │       └─ Completeness      20%  (structural component detection)
+        │
+        ├─── Confidence Score (30% of final)
+        │       ├─ Grammar           35%  (TTR + sentence length + repetition)
+        │       ├─ Filler words       30%  (um, uh, basically, literally…)
+        │       ├─ Speaking pace      20%  (WPM — ideal: 120–155)
+        │       └─ Hesitation pauses  15%  (gaps > 1s detected by librosa)
+        │
+        └─── FLAN-T5 narrative coaching paragraph
+                    │
+                    ▼
+             Stored in PostgreSQL → displayed in frontend
+```
+
+---
+
+## Prerequisites
+
+| Requirement | Version |
+|---|---|
+| Python | **3.12.10** (PyTorch is not compatible with 3.13/3.14) |
+| Node.js | 18+ |
+| PostgreSQL | Any (Neon cloud or local) |
+| Disk space | ~2 GB (ML models) |
+
+---
+
+## Backend Setup
+
 ```powershell
-# Using winget
-winget install Python.Python.3.12
-
-# Verify installation
-python3.12 --version  # Should output: Python 3.12.10
-```
-
-**macOS:**
-```bash
-# Using Homebrew
-brew install python@3.12
-
-# Verify
-python3.12 --version
-```
-
-### 2. Clone and navigate to project
-
-```bash
-git clone <your-repo-url>
 cd interview_coach
+
+# 1. Create virtual environment with Python 3.12
+python3.12 -m venv venv_py312
+.\venv_py312\Scripts\Activate.ps1
+
+# 2. Install dependencies
+pip install --upgrade pip
+pip install -r requirements.txt
+
+# 3. Download spaCy language model
+python -m spacy download en_core_web_sm
+
+# 4. Configure environment
+copy .env.example .env
+# Edit .env and set DATABASE_URL to your PostgreSQL connection string
+
+# 5. Start the server
+uvicorn main:app --host 127.0.0.1 --port 8000 --reload
 ```
 
-### 3. Create and activate virtual environment
+The server logs will show `All models loaded — API is ready` once Whisper, sentence-transformers, and spaCy have finished loading (~30–60 s on first start).
+
+---
+
+## Frontend Setup
+
+```powershell
+cd frontend
+
+# 1. Install dependencies
+npm install
+
+# 2. Start dev server
+npm run dev
+```
+
+Open [http://localhost:5173](http://localhost:5173).
+
+---
+
+## API Endpoints
+
+| Method | Path | Description |
+|---|---|---|
+| `POST` | `/users/register` | Register a user |
+| `GET` | `/users/{id}` | Get user profile |
+| `POST` | `/sessions/` | Start a new interview session |
+| `PATCH` | `/sessions/{id}/end` | Mark session as completed |
+| `GET` | `/sessions/user/{id}/history` | All sessions with aggregated scores |
+| `POST` | `/questions/for-session` | Fetch questions for role + level |
+| `POST` | `/responses/upload-audio` | Submit audio answer → full scoring |
+| `GET` | `/responses/session/{id}` | All responses for a session |
+| `GET` | `/weak-areas/user/{id}` | User's identified weak topics |
+| `GET` | `/question-history/user/{id}` | Questions previously seen |
+
+Full interactive docs: [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs)
+
+---
+
+## Scoring System
+
+### Answer Quality Score (0–100)
+
+| Component | Weight | Method |
+|---|---|---|
+| Semantic similarity | 50% | Cosine similarity via `all-MiniLM-L6-v2` |
+| Keyword coverage | 30% | spaCy lemmatized matching against expected keywords |
+| Structural completeness | 20% | Pattern detection for definition, example, explanation, etc. |
+
+### Confidence Score (0–100)
+
+| Component | Weight | Method |
+|---|---|---|
+| Grammar quality | 35% | Type-token ratio + sentence length naturalness |
+| Filler word rate | 30% | "um", "uh", "basically", "literally", etc. |
+| Speaking pace | 20% | Words per minute (ideal: 120–155 WPM) |
+| Pause frequency | 15% | Hesitation gaps > 1 s detected by librosa |
+
+### Final Score
+
+`Final = Answer Quality × 0.70 + Confidence × 0.30`
+
+### Labels
+
+| Score | Label |
+|---|---|
+| ≥ 85 | Excellent |
+| ≥ 65 | Good |
+| ≥ 45 | Average |
+| < 45 | Poor |
+
+---
+
+## Supported Roles & Types
+
+**Roles:** Data Analyst · Data Scientist · DevOps Engineer
+
+**Experience levels:** Fresher (0–1 yr) · Junior (1–3 yr) · Mid-level (3–5 yr) · Senior (5+ yr)
+
+**Interview types:** Technical · Behavioral · Theoretical · Mixed
+
+---
+
+## Tech Stack
+
+### Backend
+- **FastAPI** — async REST API
+- **SQLAlchemy 2** — ORM with PostgreSQL
+- **OpenAI Whisper** (base) — speech-to-text
+- **sentence-transformers** (`all-MiniLM-L6-v2`) — semantic scoring
+- **spaCy** (`en_core_web_sm`) — keyword lemmatization
+- **librosa** — audio analysis (duration, pauses)
+- **FLAN-T5-base** — feedback generation
+
+### Frontend
+- **React 19** + **Vite**
+- **React Router** — client-side routing
+- **Recharts** — performance charts (line chart, radar chart)
+- **react-icons** — UI icons
+
+---
+
+## Notes
+
+- **No authentication yet** — `USER_ID = 1` is hardcoded in `frontend/src/api/config.js`. Swap this once auth is implemented.
+- **Audio format** — the browser sends WebM; Whisper handles it directly. WAV/MP4 are preferred if the browser supports them.
+- **First request** — models are pre-warmed on startup via the `lifespan` handler, so responses stay fast after the initial load.
+- **FLAN-T5 speed** — feedback generation takes 2–5 s on CPU. Swap to `flan-t5-large` in `services/feedback_generator.py` for richer prose.
 
 ```bash
 # Create

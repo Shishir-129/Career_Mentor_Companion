@@ -24,23 +24,13 @@ def calculate_average(values):
 
 
 def calculate_overall_score(scores_dict):
-    """Calculate weighted overall score from individual metrics"""
-    # Weights: Give more importance to answer quality and confidence
-    weights = {
-        'answer_quality_avg': 0.30,
-        'semantic_avg': 0.20,
-        'keyword_avg': 0.15,
-        'completeness_avg': 0.15,
-        'confidence_avg': 0.15,
-        'grammar_avg': 0.05,
-    }
-    
-    overall = 0
-    for metric, weight in weights.items():
-        if scores_dict.get(metric, 0) > 0:
-            overall += scores_dict[metric] * weight
-    
-    return round(overall, 2)
+    """Overall = Answer Quality (70%) + Confidence (30%).
+    answer_quality already aggregates semantic, keyword and completeness,
+    so there is no need to include them separately.
+    """
+    quality    = scores_dict.get('answer_quality_avg', 0) or 0
+    confidence = scores_dict.get('confidence_avg', 0) or 0
+    return round(quality * 0.70 + confidence * 0.30, 2)
 
 
 @router.post("/", response_model=SessionResponse)
