@@ -1,16 +1,15 @@
-================================================================================
+﻿================================================================================
 WHAT IS THE PROJECT?
 ================================================================================
 An AI-powered web application that acts as a personal interview coach
-for the Data Science domain. Candidates select a role, experience level,
-and interview type. The system generates tailored questions, records their
-spoken answer, transcribes it, evaluates it, measures their confidence
-from audio signals, generates personalized feedback, and shows everything
-on a performance dashboard.
+for the Data Science domain. Candidates register, select a role, experience
+level, difficulty, and interview type. The system presents tailored questions,
+records their spoken answer, transcribes it with Whisper, evaluates answer
+quality and delivery confidence, generates score-based coaching feedback, and
+displays everything on a performance dashboard.
 
-Domain: Data Science only (Data Analyst, Data Engineer, MLOps Engineer,
-        BI Developer, Analytics Engineer)
-Type:   Practice & self-improvement tool — NOT a recruitment decision tool
+Domain: Data Science (Data Analyst, Data Scientist, DevOps Engineer)
+Type:   Practice & self-improvement tool -- NOT a recruitment decision tool
 
 
 ================================================================================
@@ -29,7 +28,7 @@ PROBLEM BEING SOLVED
 ================================================================================
 OBJECTIVES
 ================================================================================
-1. Build an AI mock interview system that generates role-specific questions,
+1. Build an AI mock interview system that selects role-specific questions,
    converts spoken answers to text, and evaluates content + confidence.
 2. Provide automated, personalized feedback and performance scores that
    help candidates measurably improve their interview skills.
@@ -42,179 +41,165 @@ SYSTEM ARCHITECTURE (Client-Server, Modular)
   USER (Candidate)
       |
       v
-  FRONTEND — React.js + TypeScript + Tailwind CSS + Recharts
+  FRONTEND -- React.js (JavaScript) + Vite + Recharts
       |
-      | REST API (JWT Auth)
+      | REST API (email/password auth, argon2 hashing)
       v
-  BACKEND — FastAPI (Python) + Uvicorn + JWT + Passlib
+  BACKEND -- FastAPI (Python 3.12) + Uvicorn
       |
-      |-----> Question Generator
-      |-----> Speech-to-Text (OpenAI Whisper)
-      |-----> Answer Evaluation (Sentence Transformers + spaCy)
-      |-----> Confidence Analysis (Librosa)
-      |-----> Feedback Generator (Hugging Face Flan-T5-Large)
-      |-----> Scoring & Dashboard (Pandas + NumPy + Scikit-learn)
+      |-----> Question Selection  (sentence-transformers diversity algorithm)
+      |-----> Speech-to-Text      (OpenAI Whisper base)
+      |-----> Answer Evaluation   (sentence-transformers + spaCy)
+      |-----> Confidence Analysis (Librosa + text-based grammar scoring)
+      |-----> Coaching Feedback   (rule-based, score-derived)
       |
-      |-----> PostgreSQL Database (SQLAlchemy ORM)
-      |-----> File Storage: Local / AWS S3 (audio + resume files)
+      |-----> PostgreSQL Database (SQLAlchemy ORM, hosted on Neon)
 
 
 ================================================================================
 MODULE-BY-MODULE BREAKDOWN
 ================================================================================
 
---- MODULE 1: QUESTION GENERATION ---
-How:   LLM with structured prompt engineering
-Input: Role + Experience Level + Interview Type (selected by user)
-Output: Set of tailored questions + reference answers (stored in PostgreSQL)
+--- MODULE 1: QUESTION SELECTION ---
+How:   Greedy semantic diversity selection using sentence-transformers
+Input: Role + Experience Level + Difficulty + Interview Type (from user)
+Output: 5 topically diverse questions from the PostgreSQL question bank
 
-Prompt structure:
-  "Generate N [technical/HR] interview questions for a [level] [role].
-   Cover competency areas: [list]. Return JSON with question + reference answer."
+Selection algorithm:
+  1. Filter pool by role + experience_level + question_type + difficulty (80 max)
+     Progressive fallback: loosen difficulty -> drop type -> drop level
+  2. Seed: pick the verified + least-asked question matching the difficulty
+  3. Each next pick: maximize (1 - max_cosine_similarity_to_already_selected)
+     + small bonus for verified questions and low times_asked count
+  4. Increment times_asked for selected questions after the session
 
-Difficulty calibration:
-  Fresher  → Conceptual definitions ("What is overfitting?")
-  Junior   → Application ("How do you handle class imbalance?")
-  Mid      → Trade-off/design ("Compare SMOTE vs cost-sensitive learning")
-  Senior   → Architecture ("Design a real-time fraud detection ML pipeline")
+Why semantic diversity matters:
+  Pure random sampling often picks questions on the same topic.
+  The embedding-based approach ensures each session covers different
+  concepts (not five questions all about SQL joins).
 
-Competency taxonomy (example — Data Scientist):
-  Statistics & Probability | ML Algorithms | Feature Engineering |
-  Model Evaluation | Python/SQL | Communication of Insights
-
-Deduplication: Cosine similarity on question embeddings prevents repeats.
+Difficulty + experience mapping:
+  Fresher  -> conceptual definitions ("What is overfitting?")
+  Junior   -> application ("How do you handle class imbalance?")
+  Mid      -> trade-offs ("Compare SMOTE vs cost-sensitive learning")
+  Senior   -> architecture ("Design a real-time fraud detection pipeline")
 
 Database model (PostgreSQL):
-  Questions table — id, role, topic, subtopic, difficulty, question_type,
-                    question_text, ideal_answer, keywords, code_expected,
-                    verified, times_asked, created_at
+  questions -- id, role, topic, subtopic, difficulty, experience_level,
+               question_type, question_text, ideal_answer, keywords,
+               expected_components, code_expected, verified, times_asked, created_at
 
-Data seed sources (reliable, open-source):
-  1. github.com/youssefHosni/Data-Science-Interview-Questions-Answers
-     (~200 Q&A: ML, DL, Statistics, Probability, Python)
-  2. github.com/alexeygrigorev/data-science-interviews
-     (~150 Q&A: Theory + SQL + Coding)
-  3. github.com/iamtodor/data-science-interview-questions-and-answers
-     (~100 Q&A: General DS concepts)
-  4. github.com/kojino/120-Data-Science-Interview-Questions (120 Q&A)
-  5. kaggle.com/datasets/die9origephit/data-science-interview-questions
-  + LLM-generated questions for role gaps (marked verified=False)
-  Total estimated seed: ~770 reliable questions
-
-WHY Hugging Face over OpenAI for question generation:
-  - Free, open-source, no per-request API cost
-  - Flan-T5-Large is instruction-tuned on 1,836 tasks — perfect for prompts
-  - Consistent with feedback generation (same model, same stack)
-  - For production at scale: OpenAI GPT-4 could be reconsidered
+Question data source:
+  Scraped from github.com/alexeygrigorev/data-science-interviews using
+  BeautifulSoup. Keywords extracted by KeyBERT at seeding time and stored
+  in the DB. Difficulty inferred from emoji markers (baby=easy, star=medium,
+  rocket=hard).
 
 
 --- MODULE 2: SPEECH-TO-TEXT ---
-Tool:  OpenAI Whisper (open-source, free)
-Model: Trained on 680,000 hours of weakly supervised multilingual audio
-Input: Candidate's recorded audio (WAV/MP3)
-Output: Accurate text transcript + word-level timestamps
-Why Whisper: Handles accents, background noise, varied speech — robust ASR
-Paper: Radford et al., 2022 — arXiv:2212.04356 (already cited in report)
+Tool:  OpenAI Whisper (open-source, runs locally)
+Model: base -- trained on 680,000 hours of multilingual audio
+Input: Candidate's recorded audio (WAV/MP3/WebM from browser)
+Output: Text transcript
+Why Whisper: Handles accents, background noise, varied speech -- no API cost
+Paper: Radford et al., 2022 -- arXiv:2212.04356
+
+Implementation notes:
+  - Audio saved temporarily, Whisper transcribes, file deleted immediately
+  - Whisper transcription and Librosa analysis run in parallel
+    (ThreadPoolExecutor) to reduce total processing time
 
 
 --- MODULE 3: ANSWER EVALUATION ---
-Tools: Sentence Transformers (SBERT) + spaCy
+Tools: sentence-transformers (SBERT) + spaCy + pattern matching
 
-Step 1 — Semantic Similarity (SBERT):
-  - Candidate transcript → SBERT embedding vector
-  - Reference answer → SBERT embedding vector
-  - Cosine similarity computed between the two vectors
-  - Score 0.85-1.0 = Excellent | 0.65-0.84 = Good | <0.45 = Poor
-  - Why SBERT not plain BERT: BERT needs both sentences fed together
-    (50M inference ops for 10K pairs = 65 hours). SBERT reduces to 5 seconds.
-  - Paper: Reimers & Gurevych, EMNLP 2019 — arXiv:1908.10084
+Step 1 -- Semantic Similarity (SBERT):
+  - Candidate transcript -> all-MiniLM-L6-v2 embedding vector
+  - Ideal answer (stored in DB) -> all-MiniLM-L6-v2 embedding vector
+  - Cosine similarity, scaled to 0-100
+  - >=85 = Excellent | >=65 = Good | >=45 = Average | <45 = Poor
+  - Paper: Reimers & Gurevych, EMNLP 2019 -- arXiv:1908.10084
 
-Step 2 — Keyword Coverage (spaCy):
-  - Tokenization + POS tagging + NER on transcript
-  - Match against curated keyword bank for the question
-  - Keyword Score = (matched keywords / total expected keywords) × 100
+Step 2 -- Keyword Coverage (spaCy):
+  - Lemmatize transcript and each expected keyword with en_core_web_sm
+  - Check if lemmatized keyword appears in lemmatized transcript
+  - Score = (matched / total_expected) * 100
 
-Step 3 — Completeness Score:
-  - Sentence segmentation checks if answer covers all required sub-components
-  - (definition, example, use case, limitation, etc.)
+Step 3 -- Completeness Score (pattern matching):
+  - Detect structural components: definition, example, explanation,
+    comparison, use_case, limitation -- using phrase pattern matching
+  - Verified against ideal answer first: only penalised if ideal answer
+    also demonstrates the component
+  - Score = (found / expected) * 100
 
-Final Technical Score:
-  = 0.5 × Semantic Score + 0.3 × Keyword Score + 0.2 × Completeness Score
-
-Reference answer source: Generated by Flan-T5 at question creation time,
-  stored in PostgreSQL alongside the question. Retrieved at eval time.
+Answer Quality Score:
+  = 0.50 * Semantic + 0.30 * Keyword + 0.20 * Completeness
 
 
 --- MODULE 4: CONFIDENCE ANALYSIS ---
-Tool: Librosa (Python audio analysis library)
+Tool: Librosa (audio) + text-based scoring
 
-Feature 1 — Speaking Pace (WPM):
-  duration = librosa.get_duration(y=y, sr=sr)
-  WPM = (word count from Whisper / duration in seconds) × 60
-  Ideal: 120–160 WPM | Too slow <100 = hesitant | Too fast >180 = anxious
+Feature 1 -- Grammar Quality (35% weight):
+  - Type-token ratio, sentence length naturalness, repetition penalty
+  - Normalized to 0-100
 
-Feature 2 — Pause Detection:
-  intervals = librosa.effects.split(y, top_db=30)
-  Extracts: pause count, average pause duration, silence ratio
-  Interpretation: frequent long pauses → unsure; natural short pauses → normal
+Feature 2 -- Filler Word Rate (30% weight):
+  - Counts: "um", "uh", "you know", "basically", "literally", etc.
+  - Rate per 100 words (longer answers not unfairly penalized)
+  - <=1/100 words = excellent | >10/100 words = very poor
 
-Feature 3 — Filler Word Detection:
-  Whisper provides word-level timestamps → count "um", "uh", "like",
-  "you know", "basically" in transcript
-  Filler rate = (filler count / total words) × 100
-  Ideal: < 2% | Poor: > 5%
+Feature 3 -- Speaking Pace (20% weight):
+  - WPM = (word count / audio duration) * 60
+  - 120-155 WPM = Excellent | else progressively lower
 
-Confidence Score = 0.3 × Pace Score + 0.4 × Pause Score + 0.3 × Filler Score
-  (each sub-score normalized to 0–100)
+Feature 4 -- Hesitation Pauses (15% weight):
+  - librosa.effects.split() detects silence gaps > 1 second
+  - Rate per minute (longer answers not penalized)
 
-Research backing: Naim, Tanveer, Gildea, Hoque (2018) — IEEE Transactions
-  on Affective Computing — validated that speaking rate, filler words, and
-  pauses correlate with interview performance ratings (r = 0.75+)
+Confidence Score:
+  = 0.35 * Grammar + 0.30 * Filler + 0.20 * Pace + 0.15 * Pause
+
+Research backing: Naim et al. (2018) -- IEEE Transactions on Affective
+  Computing -- validated that pace, filler words, and pauses correlate
+  with interview performance ratings (r = 0.75+)
 
 
---- MODULE 5: FEEDBACK GENERATION ---
-Tool: Hugging Face Flan-T5-Large (same model as question generation)
+--- MODULE 5: COACHING FEEDBACK ---
+Method: Score-derived rule-based narrative (not LLM)
 
 How it works:
-  1. Scores from modules 3 & 4 are combined into a structured prompt
-  2. Prompt sent to Flan-T5-Large via Hugging Face Inference API or local
-  3. Model generates personalized, natural-language feedback text
+  1. All scores passed to feedback_generator.py
+  2. Strengths: populated for each dimension scoring >= 65
+  3. Improvements: from coaching_tips (missing components) + missed keywords
+  4. Narrative paragraph:
+     - Opening: answer_quality band (80+ / 65+ / 45+ / <45)
+     - Middle: diagnostic comparing semantic vs keyword scores
+     - Improvement: single most impactful coaching action
+     - Closing: delivery coaching based on confidence band
 
-Example prompt:
-  "You are an expert interview coach for Data Science roles.
-   Candidate answered: [QUESTION]
-   Their answer: [TRANSCRIPT]
-   Technical score: 78/100 (missing keyword: error handling)
-   Confidence score: 65/100 (3 filler words, 2 long pauses)
-   Generate specific, actionable 2-3 sentence feedback."
+Why not LLM:
+  flan-t5-base echoed prompt instructions instead of generating feedback.
+  The rule-based approach is faster, always reliable, and more specific
+  because it directly uses the actual numeric scores and identified gaps.
 
-Example output:
-  "Your explanation of ETL pipelines was clear. Strengthen it by discussing
-   error handling and idempotency in production pipelines. Try to reduce
-   filler words and pause frequency to boost confidence perception."
-
-Why not templates: Templates give same feedback for same score regardless
-  of what the candidate actually said. Flan-T5 reads the actual answer and
-  generates unique, context-aware advice.
-Why not OpenAI GPT-4: Costs $0.02-0.05 per generation. Flan-T5 is free.
-  95% of the quality at 0% of the cost — right choice for student project.
-Time: 1-3 seconds per answer — practical for real-time dashboards.
+Final Overall Score:
+  = Answer Quality * 0.70 + Confidence * 0.30
 
 
---- MODULE 6: SCORING & DASHBOARD ---
-Tools: Pandas, NumPy, Scikit-learn (backend) + Recharts (frontend)
+--- MODULE 6: DASHBOARD & SKILL ANALYSIS ---
+Tools: Recharts (frontend) + FastAPI aggregation
 
-Four scores displayed:
-  1. Overall Score     = weighted average of all components
-  2. Technical Score   = from answer evaluation (SBERT + spaCy)
-  3. Confidence Score  = from audio analysis (Librosa)
-  4. Communication Score = clarity, fluency, sentence structure
+Dashboard displays:
+  - Completed count, avg score, best score, avg answer quality, avg confidence
+  - Performance Trend chart (answer quality + confidence over sessions)
+  - Recent sessions list with per-session scores and status
 
-Dashboard features:
-  - Per-question breakdown with feedback
-  - Score history to track improvement over sessions
-  - Interactive charts (Recharts)
-  - Strengths and areas for improvement summary
+Skill Analysis page (Weak Areas):
+  - Averages 5 score dimensions across completed sessions:
+    Conceptual Understanding (semantic), Technical Vocabulary (keyword),
+    Answer Structure (completeness), Delivery & Confidence, Language Clarity
+  - Sorted weakest-first with color-coded severity
+  - Expandable coaching tips per dimension
 
 
 ================================================================================
@@ -223,124 +208,76 @@ FULL TECH STACK
 
 Category              | Technology
 ----------------------|------------------------------------------
-Frontend              | React.js, TypeScript, Tailwind CSS, Recharts
-Backend               | FastAPI (Python), Uvicorn
-Database              | PostgreSQL + SQLAlchemy ORM
-Authentication        | JWT, Passlib
-Speech-to-Text        | OpenAI Whisper
-Answer Evaluation     | Sentence Transformers (SBERT), spaCy
-Question 	      | LLM
-Confidence Analysis   | Librosa
-Data Processing       | Pandas, NumPy, Scikit-learn
-Feedback   	      | Hugging Face Transformers (Flan-T5-Large)
-File Storage          | Local (dev) / AWS S3 (prod)
-Deployment            | Docker, Vercel (frontend), Render/AWS (backend)
+Frontend              | React 19 (JavaScript), Vite, Recharts, react-icons
+Backend               | FastAPI (Python 3.12), Uvicorn
+Database              | PostgreSQL + SQLAlchemy ORM (Neon or local)
+Authentication        | argon2 hashing (pwdlib), localStorage session
+Speech-to-Text        | OpenAI Whisper (base, local)
+Semantic Scoring      | sentence-transformers (all-MiniLM-L6-v2, local)
+Question Selection    | sentence-transformers (greedy diversity, same model)
+Keyword Scoring       | spaCy (en_core_web_sm, local)
+Keyword Extraction    | KeyBERT (seeding time only, result stored in DB)
+Confidence Analysis   | Librosa + text grammar scoring
+Coaching Feedback     | Rule-based narrative from score data
+File Storage          | Local uploads/ dir (audio deleted after transcription)
 
+
+================================================================================
+AUTHENTICATION FLOW
+================================================================================
+
+Registration:
+  User submits fullname + email + password + target_role
+  -> argon2 hash stored in PostgreSQL users table
+  -> { id, fullname, email, target_role } returned
+  -> Saved in browser localStorage as "auth" object
+
+Login:
+  User submits email + password
+  -> Backend fetches user by email, verifies argon2 hash
+  -> Returns user object if valid, 401 if not
+  -> Saved in browser localStorage
+
+Session management:
+  - All pages read userId from localStorage via getUserId()
+  - Sign out clears localStorage, redirects to login
+  - No JWT tokens -- stateless trust on the frontend side
+  - Suitable for academic/demo context
+
+
+================================================================================
+SCORING REFERENCE
+================================================================================
+
+Answer Quality Score (0-100):
+  Semantic similarity     50%  (all-MiniLM-L6-v2 cosine similarity)
+  Keyword coverage        30%  (spaCy lemmatized matching)
+  Structural completeness 20%  (phrase pattern detection)
+
+Confidence Score (0-100):
+  Grammar quality         35%  (TTR + sentence length + repetition)
+  Filler word rate        30%  (um, uh, basically, literally, etc.)
+  Speaking pace           20%  (WPM, ideal 120-155)
+  Hesitation pauses       15%  (gaps > 1s via librosa)
+
+Overall Session Score:
+  Answer Quality * 0.70 + Confidence * 0.30
+
+Score Labels:
+  >= 85 = Excellent | >= 65 = Good | >= 45 = Average | < 45 = Poor
 
 
 ================================================================================
 FEASIBILITY SUMMARY
 ================================================================================
 
-Technical:   All tools are open-source, well-documented, pre-trained.
-             No model training from scratch required.
-Economic:    Total estimated cost = NPR 4,000 (cloud hosting only).
-             All software is free. No expensive licenses.
-Operational: Requires only a browser + microphone + internet.
-             No technical skill needed from end user.
-Schedule:    3 months. Modular structure allows incremental development.
-Legal:       Voice data stored securely, used only for feedback generation.
-             User policy required. All libraries used per their licenses.
+Technical:   All tools are open-source, pre-trained, run locally.
+             No model training from scratch. No API costs at runtime.
+Economic:    Total estimated cost = NPR 4,000 (cloud DB hosting only).
+Operational: Requires only a browser + microphone.
+Legal:       Audio deleted immediately after transcription.
+             Passwords hashed with argon2. No plain-text credentials stored.
 
-
-================================================================================
-PROJECT SCHEDULE (Jun 8 – Aug 31, 2025)
-================================================================================
-
-Phase                        | Timeline
------------------------------|------------------
-Project Identification       | Jun 8 – Jun 15
-Requirement Analysis         | Jun 15 – Jun 29
-Literature Review            | Jun 15 – Jun 29
-Data Collection & Prep       | Jun 29 – Jul 13
-Module / Model Development   | Jul 13 – Aug 3
-Frontend Development         | Jul 13 – Aug 3
-Backend & API Integration    | Jul 20 – Aug 10
-Testing & Debugging          | Aug 3 – Aug 17
-Deployment                   | Aug 24 – Aug 31
-Documentation & Reporting    | Jun 8 – Aug 31 (ongoing)
-
-
-================================================================================
-BUDGET
-================================================================================
-
-Item                                        | Cost (NPR)
---------------------------------------------|------------
-Cloud hosting & deployment (frontend+backend)| 2,000
-Documentation, printing, misc               | 2,000
-TOTAL                                       | 4,000
-
-
-================================================================================
-KEY DECISIONS MADE (from project discussions)
-================================================================================
-
-Q: Which model for question generation — HF or OpenAI?
-A: LLM for question generation, Hugging Face Flan-T5-Large for feedback.
-   Unified stack. Free. Instruction-tuned. Consistent architecture.
-
-Q: What is the source of reference answers?
-A: Generated by Flan-T5 at question creation time using structured prompt.
-   Stored in PostgreSQL alongside each question. Retrieved at eval time.
-
-Q: How does answer evaluation work?
-A: Three-component composite: SBERT cosine similarity (50%) + spaCy keyword
-   coverage (30%) + completeness score (20%).
-
-Q: How does Librosa measure confidence?
-A: Three audio features: speaking pace (WPM), pause frequency/duration,
-   and filler word rate. Each normalized 0-100 and weighted into one score.
-
-Q: How does Flan-T5 generate feedback?
-A: Takes a structured prompt containing the question, transcript, and all
-   numeric scores → generates unique natural-language coaching advice.
-   Not a template. Different output for every candidate's unique answer.
-
-Q: Where to get seed question data?
-A: Primary: github.com/youssefHosni + github.com/alexeygrigorev +
-            github.com/iamtodor + github.com/kojino (total ~770 Q&A)
-   Secondary: Kaggle DS interview dataset
-   Gap-filling: Flan-T5 generated (marked verified=False in DB)
-
-Q: Why not use exact matching for answer evaluation?
-A: Exact matching fails for semantically identical but differently worded
-   answers. SBERT understands meaning — "ML workflow" and "machine learning
-   pipeline" score high similarity despite different words.
-
-Q: Is this a replacement for human interviewers?
-A: No. Explicitly a practice and self-improvement tool. Not for actual
-   recruitment decisions.
-
-
-================================================================================
-SCOPE BOUNDARIES
-================================================================================
-
-IN SCOPE:
-  - Data Science domain only
-  - Roles: Data Analyst, Data Engineer, MLOps, BI Developer, Analytics Engineer
-  - Experience: Fresher, Junior, Mid-level, Senior
-  - Interview types: Technical and HR/Behavioral
-  - Text and voice-based answers
-  - Web application (browser-based)
-
-OUT OF SCOPE:
-  - Other domains (software engineering, finance, etc.)
-  - Video/facial expression analysis
-  - Live recruiter integration
-  - Mobile app
-  - Actual hiring decisions
 
 ================================================================================
 END OF REFERENCE SHEET

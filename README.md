@@ -1,6 +1,6 @@
 # Interview Coach
 
-An AI-powered mock interview platform for Data Science roles. Candidates select a role and experience level, answer spoken questions, and receive instant scoring and coaching feedback on both **content quality** and **delivery confidence**.
+An AI-powered mock interview platform for Data Science roles. Candidates register, select a role, difficulty and experience level, answer spoken questions, and receive instant scoring and coaching feedback on both **content quality** and **delivery confidence**.
 
 ---
 
@@ -11,36 +11,34 @@ minor_project/
 ├── frontend/                   # React + Vite frontend
 │   └── src/
 │       ├── api/
-│       │   ├── config.js       # Shared BASE_URL and USER_ID constants
+│       │   ├── config.js       # BASE_URL + auth helpers (getAuth, getUserId)
 │       │   └── interviewApi.js # All API calls in one place
 │       ├── components/
-│       │   └── Sidebar.jsx     # Navigation sidebar
-│       ├── config/
-│       │   └── user.js         # Current user profile (Settings page)
+│       │   └── Sidebar.jsx     # Navigation sidebar with logout
 │       └── pages/
-│           ├── NewInterview    # Configure role, level, type
+│           ├── Login           # Login & register
+│           ├── NewInterview    # Configure role, level, difficulty, type
 │           ├── StartInterview  # Record answers, view per-question feedback
-│           ├── Dashboard       # Scores, performance charts, radar chart
-│           ├── History         # All past sessions with filter
-│           ├── WeakAreas       # Low-scoring topics with improvement tips
-│           └── Settings        # Edit name/role/initials
+│           ├── Dashboard       # Scores, performance trend chart, session history
+│           ├── WeakAreas       # Skill breakdown with improvement tips
+│           └── Settings        # Account profile view
 │
 └── interview_coach/            # FastAPI backend
-    ├── main.py                 # App entry point, Whisper transcription
+    ├── main.py                 # App entry point, Whisper transcription, model warmup
     ├── database/
     │   ├── connection.py       # SQLAlchemy engine & session
-    │   └── models.py           # User, Questions, Sessions, Responses, WeakArea
+    │   └── models.py           # User, Questions, Sessions, Responses
     ├── routers/                # API route handlers (one file per resource)
     ├── crud/                   # Database operations (one file per model)
     ├── schemas/                # Pydantic request/response models
     ├── services/               # AI scoring & feedback logic
-    │   ├── semantic_score.py       # Sentence-transformers cosine similarity
+    │   ├── semantic_score.py       # sentence-transformers cosine similarity
     │   ├── keyword_score.py        # spaCy lemmatized keyword matching
     │   ├── completeness_score.py   # Structural component detection
-    │   ├── answer_quality_scorer.py # Aggregates above three (50/30/20 weights)
+    │   ├── answer_quality_scorer.py # Aggregates above three (50/30/20)
     │   ├── confidence_scoring.py   # Grammar, pace, fillers, pauses via librosa
-    │   ├── feedback_generator.py   # FLAN-T5 narrative coaching tips
-    │   ├── question_generator.py   # Fetches questions for a session
+    │   ├── feedback_generator.py   # Score-derived coaching narrative
+    │   ├── question_generator.py   # Greedy semantic diversity selection
     │   ├── keyword_extractor.py    # KeyBERT extraction (used by seed scripts)
     │   └── components_generator.py # Detects expected components (used by seeds)
     └── scripts/                # One-time DB utilities (seed, migrate, check)
@@ -59,18 +57,18 @@ POST /responses/upload-audio
         ├─── [parallel] ─── Whisper (speech → text)
         │                   Librosa (audio duration + pause detection)
         │
-        ├─── Answer Quality (70% of final)
-        │       ├─ Semantic score    50%  (sentence-transformers vs ideal answer)
-        │       ├─ Keyword score     30%  (spaCy lemmatized keyword matching)
-        │       └─ Completeness      20%  (structural component detection)
+        ├─── Answer Quality Score (70% of final)
+        │       ├─ Semantic     50%  (sentence-transformers cosine similarity)
+        │       ├─ Keywords     30%  (spaCy lemmatized matching)
+        │       └─ Completeness 20%  (structural component detection)
         │
         ├─── Confidence Score (30% of final)
-        │       ├─ Grammar           35%  (TTR + sentence length + repetition)
-        │       ├─ Filler words       30%  (um, uh, basically, literally…)
-        │       ├─ Speaking pace      20%  (WPM — ideal: 120–155)
-        │       └─ Hesitation pauses  15%  (gaps > 1s detected by librosa)
+        │       ├─ Grammar      35%  (TTR + sentence length + repetition)
+        │       ├─ Filler words 30%  (um, uh, basically, literally…)
+        │       ├─ Speaking pace 20% (WPM — ideal: 120–155)
+        │       └─ Pauses       15%  (hesitation gaps > 1s via librosa)
         │
-        └─── FLAN-T5 narrative coaching paragraph
+        └─── Score-derived coaching feedback paragraph
                     │
                     ▼
              Stored in PostgreSQL → displayed in frontend
@@ -137,12 +135,12 @@ Open [http://localhost:5173](http://localhost:5173).
 
 | Method | Path | Description |
 |---|---|---|
-| `POST` | `/users/register` | Register a user |
-| `GET` | `/users/{id}` | Get user profile |
+| `POST` | `/users/register` | Register a new user |
+| `POST` | `/users/login` | Login — returns user profile |
 | `POST` | `/sessions/` | Start a new interview session |
 | `PATCH` | `/sessions/{id}/end` | Mark session as completed |
 | `GET` | `/sessions/user/{id}/history` | All sessions with aggregated scores |
-| `POST` | `/questions/for-session` | Fetch questions for role + level |
+| `POST` | `/questions/for-session` | Fetch diverse questions for role + level + difficulty |
 | `POST` | `/responses/upload-audio` | Submit audio answer → full scoring |
 | `GET` | `/responses/session/{id}` | All responses for a session |
 | `GET` | `/weak-areas/user/{id}` | User's identified weak topics |
@@ -201,26 +199,28 @@ Full interactive docs: [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs)
 ### Backend
 - **FastAPI** — async REST API
 - **SQLAlchemy 2** — ORM with PostgreSQL
-- **OpenAI Whisper** (base) — speech-to-text
-- **sentence-transformers** (`all-MiniLM-L6-v2`) — semantic scoring
-- **spaCy** (`en_core_web_sm`) — keyword lemmatization
-- **librosa** — audio analysis (duration, pauses)
-- **FLAN-T5-base** — feedback generation
+- **OpenAI Whisper** (base, local) — speech-to-text
+- **sentence-transformers** (`all-MiniLM-L6-v2`, local) — semantic scoring + question diversity selection
+- **spaCy** (`en_core_web_sm`, local) — keyword lemmatization
+- **KeyBERT** — keyword extraction at seeding time (result stored in DB)
+- **librosa** — audio duration + hesitation pause detection
+- **pwdlib** (argon2) — password hashing
 
 ### Frontend
 - **React 19** + **Vite**
-- **React Router** — client-side routing
-- **Recharts** — performance charts (line chart, radar chart)
+- **React Router** — client-side routing with auth guards
+- **Recharts** — performance trend chart
 - **react-icons** — UI icons
 
 ---
 
 ## Notes
 
-- **No authentication yet** — `USER_ID = 1` is hardcoded in `frontend/src/api/config.js`. Swap this once auth is implemented.
-- **Audio format** — the browser sends WebM; Whisper handles it directly. WAV/MP4 are preferred if the browser supports them.
-- **First request** — models are pre-warmed on startup via the `lifespan` handler, so responses stay fast after the initial load.
-- **FLAN-T5 speed** — feedback generation takes 2–5 s on CPU. Swap to `flan-t5-large` in `services/feedback_generator.py` for richer prose.
+- **Auth** — email + password login. Password hashed with argon2. User profile stored in `localStorage` after login. Sign out clears the session.
+- **Question selection** — greedy semantic diversity using `all-MiniLM-L6-v2` ensures each session covers different topics. Questions with high `times_asked` are deprioritized so content stays fresh across sessions.
+- **Coaching feedback** — score-derived rule-based narrative. Not LLM-generated. Reads the actual numeric scores and identified gaps to produce specific, actionable paragraphs.
+- **Audio** — browser sends WebM; Whisper handles it directly. File is deleted immediately after transcription.
+- **Model warmup** — Whisper, sentence-transformers, and spaCy load at startup via the `lifespan` handler, so all responses after the first are fast.
 
 ```bash
 # Create
