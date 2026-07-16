@@ -1,62 +1,31 @@
-import { useState } from "react";
 import Sidebar from "../components/Sidebar";
-import { CURRENT_USER, saveUser } from "../config/user";
+import { getAuth } from "../api/config";
 import "./Settings.css";
 
 export default function Settings() {
-    const [name, setName] = useState(CURRENT_USER.name);
-    const [initials, setInitials] = useState(CURRENT_USER.initials);
-    const [role, setRole] = useState(CURRENT_USER.role);
-
-    const handleSave = (e) => {
-        e.preventDefault();
-        saveUser({ name, initials, role });
-        window.location.reload();
-    };
+    const auth = getAuth();
 
     return (
         <div className="app-layout">
             <Sidebar />
             <div className="settings-wrapper">
-                <h1 className="settings-title">Settings</h1>
-                <p className="settings-subtitle">Update your profile info</p>
+                <h1 className="settings-title">Account</h1>
+                <p className="settings-subtitle">Your profile information</p>
 
-                <form onSubmit={handleSave} className="settings-form">
-                    <label>
-                        Name
-                        <input
-                            type="text"
-                            className="settings-input"
-                            value={name}
-                            onChange={(e) => setName(e.target.value)}
-                        />
-                    </label>
-
-                    <label>
-                        Initials
-                        <input
-                            type="text"
-                            className="settings-input"
-                            value={initials}
-                            onChange={(e) => setInitials(e.target.value)}
-                            maxLength={2}
-                        />
-                    </label>
-
-                    <label>
-                        Role
-                        <input
-                            type="text"
-                            className="settings-input"
-                            value={role}
-                            onChange={(e) => setRole(e.target.value)}
-                        />
-                    </label>
-
-                    <button type="submit" className="btn-large">
-                        Save
-                    </button>
-                </form>
+                <div className="settings-form">
+                    <div className="settings-field">
+                        <span className="settings-label">Full Name</span>
+                        <span className="settings-value">{auth?.fullname}</span>
+                    </div>
+                    <div className="settings-field">
+                        <span className="settings-label">Email</span>
+                        <span className="settings-value">{auth?.email}</span>
+                    </div>
+                    <div className="settings-field">
+                        <span className="settings-label">Target Role</span>
+                        <span className="settings-value">{auth?.target_role}</span>
+                    </div>
+                </div>
             </div>
         </div>
     );

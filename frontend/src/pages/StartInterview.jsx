@@ -5,6 +5,7 @@ import Sidebar from "../components/Sidebar";
 import { createSession, getQuestionsForSession, submitAudioResponse, completeSession } from "../api/interviewApi";
 import { FiMic, FiSquare, FiChevronRight } from "react-icons/fi";
 import "./StartInterview.css";
+import { getUserId } from "../api/config";
 
 export default function StartInterview() {
     const { state } = useLocation();
@@ -32,9 +33,9 @@ export default function StartInterview() {
 
     const [timer, setTimer] = useState(0);
     const timerRef = useRef(null);
-    const completedRef = useRef(false); // ✅ Track if session completion has been called
+    const completedRef = useRef(false);
 
-    const userId = 1;
+    const userId = getUserId();
 
     useEffect(() => {
         if (!role) { navigate("/new-interview"); return; }
@@ -44,8 +45,9 @@ export default function StartInterview() {
                 setSessionId(sessionData.id);
                 const questionsData = await getQuestionsForSession(
                     role,
-                    experience,        // ✅ "fresher" / "junior" / "mid-level" / "senior"
-                    interviewType,     // ✅ passed as-is, backend handles case-insensitive
+                    experience,
+                    interviewType,
+                    difficulty,
                     5
                 );
                 setQuestions(questionsData);
@@ -396,7 +398,7 @@ export default function StartInterview() {
                                 )}
                                 {feedback.llm_feedback && (
                                     <div className="si-fb-block">
-                                        <h4>💬 AI Feedback</h4>
+                                        <h4>� Coaching Feedback</h4>
                                         <p>{feedback.llm_feedback}</p>
                                     </div>
                                 )}

@@ -2,138 +2,199 @@
 import { useState, useEffect } from "react";
 import Sidebar from "../components/Sidebar";
 import axios from "axios";
-import { FiAlertCircle, FiBarChart2, FiCheckCircle } from "react-icons/fi";
+import { useNavigate } from "react-router-dom";
 import "./WeakAreas.css";
+import { BASE_URL, getUserId } from "../api/config";
 
-const BASE_URL = "http://127.0.0.1:8000";
+// Each scoring dimension: what it measures and what to do when it's low
+const DIMENSIONS = [
+    {
+        key: "semantic_avg",
+        label: "Conceptual Understanding",
+        desc: "How closely your answer captures the meaning of an ideal response.",
+        advice: [
+            "Study the core concept deeply, not just its definition — understand the why.",
+            "Practise explaining topics in your own words without notes.",
+            "After answering, compare your explanation to a reference and note the gaps.",
+        ],
+    },
+    {
+        key: "keyword_avg",
+        label: "Technical Vocabulary",
+        desc: "Use of precise domain-specific terms that interviewers expect to hear.",
+        advice: [
+            "Build a glossary of key terms for your target role and review it regularly.",
+            "Use exact terms — e.g. 'gradient descent' not 'the training process'.",
+            "After each session, note which keywords you missed and practise using them.",
+        ],
+    },
+    {
+        key: "completeness_avg",
+        label: "Answer Structure",
+        desc: "Whether your answer covers key components: definition, example, use case.",
+        advice: [
+            "Use the Define → Explain → Example framework for every technical question.",
+            "Always include a concrete real-world example in your answer.",
+            "Before finishing, ask: did I define it, explain it, and give an example?",
+        ],
+    },
+    {
+        key: "confidence_avg",
+        label: "Delivery & Confidence",
+        desc: "Speaking pace, filler word rate, and hesitation pauses.",
+        advice: [
+            "Target 120–155 WPM — practise reading text aloud at that pace.",
+            "Record yourself and count filler words like 'um', 'uh', 'basically'.",
+            "Pause deliberately instead of filling silence — a 1-second pause sounds confident.",
+        ],
+    },
+    {
+        key: "grammar_avg",
+        label: "Language Clarity",
+        desc: "Grammatical correctness and natural sentence structure.",
+        advice: [
+            "Use shorter sentences (8–15 words) — they are easier to follow.",
+            "Avoid repeating the same opening word in consecutive sentences.",
+            "Read your transcript after each session and rewrite any awkward sentences.",
+        ],
+    },
+];
+
+function getScoreColor(score) {
+    if (score < 50) return { color: "#ef4444", bg: "#fef2f2", border: "#fecaca", label: "Needs Work" };
+    if (score < 65) return { color: "#f97316", bg: "#fff7ed", border: "#fed7aa", label: "Below Average" };
+    if (score < 80) return { color: "#eab308", bg: "#fefce8", border: "#fef08a", label: "Average" };
+    return { color: "#22c55e", bg: "#f0fdf4", border: "#bbf7d0", label: "Good" };
+}
 
 export default function WeakAreas() {
-    const [weakAreas, setWeakAreas] = useState([]);
+    const navigate = useNavigate();
+    const [scores, setScores] = useState(null); // averaged scores across completed sessions
+    const [sessionCount, setSessionCount] = useState(0);
     const [loading, setLoading] = useState(true);
-    const [error, setError] = useState(null);
+    const [expanded, setExpanded] = useState(null);
+    const userId = getUserId();
 
-    const userId = 1;
+    useEffect(() => { fetchData(); }, []);
 
-    useEffect(() => {
-        fetchWeakAreas();
-    }, []);
-
-    const fetchWeakAreas = async () => {
+    const fetchData = async () => {
         try {
-            setLoading(true);
-            const res = await axios.get(
-                `${BASE_URL}/weak-areas/user/${userId}`
-            );
-            // Filter areas with avg_score < 75 as "weak"
-            const weak = res.data.filter(area => area.avg_score < 75);
-            setWeakAreas(weak);
-            setError(null);
+            const res = await axios.get(`${BASE_URL}/sessions/user/${userId}/history`);
+            const completed = res.data.filter(s => s.completed);
+            setSessionCount(completed.length);
+
+            if (completed.length === 0) { setScores(null); return; }
+
+            // Average each dimension across all completed sessions
+            const avg = (key) => {
+                const vals = completed.map(s => s.scores?.[key] || 0).filter(v => v > 0);
+                return vals.length ? Math.round(vals.reduce((a, b) => a + b, 0) / vals.length) : 0;
+            };
+
+            setScores({
+                semantic_avg:     avg("semantic_avg"),
+                keyword_avg:      avg("keyword_avg"),
+                completeness_avg: avg("completeness_avg"),
+                confidence_avg:   avg("confidence_avg"),
+                grammar_avg:      avg("grammar_avg"),
+            });
         } catch (err) {
-            console.error("Error fetching weak areas:", err);
-            setError("Failed to load weak areas data");
+            console.error(err);
         } finally {
             setLoading(false);
         }
     };
 
-    const getPriorityLevel = (score) => {
-        if (score < 60) return "High Priority";
-        if (score < 75) return "Medium Priority";
-        return "Low Priority";
-    };
+    // Sort: weakest first
+    const sorted = scores
+        ? [...DIMENSIONS].sort((a, b) => (scores[a.key] || 0) - (scores[b.key] || 0))
+        : DIMENSIONS;
 
-    const getPriorityColor = (priority) => {
-        if (priority === "High Priority") return "#ef4444";
-        if (priority === "Medium Priority") return "#f97316";
-        return "#eab308";
-    };
-
-    const getImprovementTips = (topic) => {
-        const tips = {
-            "System Design": [
-                "Study scalability patterns",
-                "Learn about load balancing",
-                "Practice designing real-world systems"
-            ],
-            "Coding": [
-                "Practice algorithm problems",
-                "Focus on time complexity",
-                "Work on clean code practices"
-            ],
-            "Data Structures": [
-                "Master hash tables",
-                "Learn tree/graph operations",
-                "Practice problem solving"
-            ],
-            "Database": [
-                "Study normalization",
-                "Learn indexing strategies",
-                "Practice query optimization"
-            ],
-        };
-        return tips[topic] || [
-            "Practice more questions on this topic",
-            "Review fundamental concepts",
-            "Study industry best practices"
-        ];
-    };
-
-    if (loading) {
-        return (
-            <div className="app-layout">
-                <Sidebar />
-                <div className="weak-areas-wrapper weak-areas-center">
-                    <p className="loading-text">⏳ Loading weak areas...</p>
-                </div>
-            </div>
-        );
-    }
-
-    if (error) {
-        return (
-            <div className="app-layout">
-                <Sidebar />
-                <div className="weak-areas-wrapper weak-areas-center">
-                    <p className="error-text">{error}</p>
-                </div>
-            </div>
-        );
-    }
+    if (loading) return (
+        <div className="app-layout">
+            <Sidebar />
+            <div className="wa-wrapper wa-center"><p className="loading-text">⏳ Analysing your scores…</p></div>
+        </div>
+    );
 
     return (
         <div className="app-layout">
             <Sidebar />
-            <div className="weak-areas-wrapper">
-                {/* Header */}
-                <div className="weak-areas-header">
+            <div className="wa-wrapper">
+
+                <div className="wa-header">
                     <div>
-                        <h1 className="weak-areas-title">Weak Areas</h1>
-                        <p className="weak-areas-subtitle">
-                            Focused improvement opportunities based on your performance.
+                        <h1>Skill Analysis</h1>
+                        <p className="wa-sub">
+                            {sessionCount === 0
+                                ? "Complete at least one interview session to see your skill breakdown."
+                                : `Based on ${sessionCount} completed session${sessionCount !== 1 ? "s" : ""}. Sorted by lowest score first.`}
                         </p>
                     </div>
+                    {sessionCount === 0 && (
+                        <button className="btn-primary" onClick={() => navigate("/new-interview")}>
+                            Start Interview
+                        </button>
+                    )}
                 </div>
 
-                {/* Weak Areas Cards */}
-                {weakAreas.length === 0 ? (
-                    <div className="empty-state">
-                        <p className="empty-icon">🎉</p>
-                        <p className="empty-text">No weak areas detected!</p>
-                        <p className="empty-subtext">Keep practicing to maintain your performance.</p>
+                {sessionCount === 0 ? (
+                    <div className="wa-empty">
+                        <p>No completed sessions yet. Your skill breakdown will appear here after your first interview.</p>
                     </div>
                 ) : (
-                    <div className="weak-areas-grid">
-                        {weakAreas.map((area, idx) => (
-                            <WeakAreaCard
-                                key={idx}
-                                area={area}
-                                priority={getPriorityLevel(area.avg_score)}
-                                priorityColor={getPriorityColor(
-                                    getPriorityLevel(area.avg_score)
-                                )}
-                                tips={getImprovementTips(area.topic)}
-                            />
-                        ))}
+                    <div className="wa-list">
+                        {sorted.map(dim => {
+                            const score = scores[dim.key] || 0;
+                            const style = getScoreColor(score);
+                            const isOpen = expanded === dim.key;
+
+                            return (
+                                <div
+                                    key={dim.key}
+                                    className="wa-card"
+                                    style={{ borderColor: score < 65 ? style.border : "#e5e7eb" }}
+                                >
+                                    <div className="wa-card-top" onClick={() => setExpanded(isOpen ? null : dim.key)}>
+                                        <div className="wa-card-left">
+                                            <div className="wa-label-row">
+                                                <span className="wa-dim-label">{dim.label}</span>
+                                                <span
+                                                    className="wa-status-badge"
+                                                    style={{ color: style.color, background: style.bg, border: `1px solid ${style.border}` }}
+                                                >
+                                                    {style.label}
+                                                </span>
+                                            </div>
+                                            <p className="wa-dim-desc">{dim.desc}</p>
+                                            <div className="wa-bar-wrap">
+                                                <div className="wa-bar">
+                                                    <div
+                                                        className="wa-bar-fill"
+                                                        style={{ width: `${score}%`, background: style.color }}
+                                                    />
+                                                </div>
+                                                <span className="wa-bar-label">{score}/100</span>
+                                            </div>
+                                        </div>
+                                        <div className="wa-score-badge" style={{ color: style.color }}>
+                                            {score}
+                                        </div>
+                                    </div>
+
+                                    {isOpen && (
+                                        <div className="wa-advice">
+                                            <p className="wa-advice-title">How to improve:</p>
+                                            <ul>
+                                                {dim.advice.map((tip, i) => (
+                                                    <li key={i}>{tip}</li>
+                                                ))}
+                                            </ul>
+                                        </div>
+                                    )}
+                                </div>
+                            );
+                        })}
                     </div>
                 )}
             </div>
@@ -141,79 +202,3 @@ export default function WeakAreas() {
     );
 }
 
-function WeakAreaCard({ area, priority, priorityColor, tips }) {
-    const targetScore = 85;
-    const progressPercent = (area.avg_score / targetScore) * 100;
-
-    return (
-        <div className="weak-area-card">
-            {/* Card Header */}
-            <div className="weak-area-header">
-                <div className="weak-area-title-section">
-                    <div className="weak-area-icon">
-                        <FiAlertCircle style={{ color: priorityColor }} />
-                    </div>
-                    <div>
-                        <h3 className="weak-area-name">{area.topic}</h3>
-                        <p className="weak-area-meta">
-                            {area.role} • {area.question_type}
-                        </p>
-                        <span 
-                            className="priority-badge"
-                            style={{ 
-                                backgroundColor: `${priorityColor}20`,
-                                color: priorityColor
-                            }}
-                        >
-                            {priority}
-                        </span>
-                    </div>
-                </div>
-                <div className="weak-area-score">
-                    <span className="score-value" style={{ color: priorityColor }}>
-                        {Math.round(area.avg_score)}
-                    </span>
-                    <span className="score-max">/100</span>
-                </div>
-            </div>
-
-            {/* Progress Bar */}
-            <div className="progress-section">
-                <div className="progress-info">
-                    <span className="progress-label">Current: {Math.round(area.avg_score)}</span>
-                    <span className="progress-label">Target: {targetScore}+</span>
-                </div>
-                <div className="progress-bar">
-                    <div
-                        className="progress-fill"
-                        style={{
-                            width: `${Math.min(progressPercent, 100)}%`,
-                            backgroundColor: priorityColor,
-                        }}
-                    />
-                </div>
-            </div>
-
-            {/* Attempts Count */}
-            <div className="attempts-section">
-                <FiBarChart2 style={{ color: "#666" }} />
-                <span className="attempts-text">
-                    {area.attempt_count} attempt{area.attempt_count !== 1 ? 's' : ''} on this topic
-                </span>
-            </div>
-
-            {/* Improvement Tips */}
-            <div className="improvement-section">
-                <h4 className="improvement-title">💡 Improvement Tips</h4>
-                <ul className="tips-list">
-                    {tips.map((tip, idx) => (
-                        <li key={idx} className="tip-item">
-                            <span className="tip-icon">✓</span>
-                            <span className="tip-text">{tip}</span>
-                        </li>
-                    ))}
-                </ul>
-            </div>
-        </div>
-    );
-}

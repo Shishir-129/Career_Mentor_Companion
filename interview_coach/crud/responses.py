@@ -2,7 +2,6 @@ from pathlib import Path
 import json
 import os
 import shutil
-import time
 from concurrent.futures import ThreadPoolExecutor
 from uuid import uuid4
 from typing import Callable, Optional
@@ -129,31 +128,21 @@ def create_response_from_audio(
     print(f"✓ Question fetched")
 
     # ── 3. Confidence / delivery scoring ─────────────────────────────────────
-    print("📊 Computing delivery scores...")
-    t0 = time.time()
     conf = compute_delivery_scores(
         transcript=transcript,
         duration_secs=audio_data["duration_secs"],
         pause_count=audio_data["pause_count"],
     )
-    t1 = time.time()
-    print(f"✓ Delivery scores: confidence={conf['confidence_score']:.1f} ({t1-t0:.2f}s)")
 
     # ── 4. Answer quality scoring (transcript vs ideal answer) ───────────────
-    print("🎯 Computing answer quality scores...")
-    t2 = time.time()
     quality = compute_answer_quality_score(
         user_answer=transcript,
         ideal_answer=ideal_answer,
         keywords_str=keywords_str,
         expected_components_json=expected_components,
     )
-    t3 = time.time()
-    print(f"✓ Quality scores: answer_quality={quality['answer_quality_score']:.1f} ({t3-t2:.2f}s)")
 
-    # ── 5. Generate narrative feedback (FLAN-T5) ─────────────────────────────
-    print("🤖 Generating FLAN-T5 feedback (may take 5-10 seconds)...")
-    t4 = time.time()
+    # ── 5. Generate feedback ──────────────────────────────────────────────────
     feedback = generate_feedback(
         answer_quality_score=quality["answer_quality_score"],
         quality_label=quality["quality_label"],
@@ -168,13 +157,10 @@ def create_response_from_audio(
         speaking_speed=conf["speaking_speed"],
         filler_count=conf["filler_count"],
         pause_count=conf["pause_count"],
-        transcript=transcript,  # ✅ Pass actual transcript to FLAN-T5
+        transcript=transcript,
     )
-    t5 = time.time()
-    print(f"✓ Feedback generated: {len(feedback['narrative_feedback'])} chars ({t5-t4:.2f}s)")
 
-    # ── 6. Build and save the response row directly (no schema gymnastics) ───
-    print("💾 Building response object...")
+    # ── 6. Save response to database ─────────────────────────────────────────
     db_response = Responses(
         session_id=session_id,
         user_id=user_id,
@@ -202,18 +188,8 @@ def create_response_from_audio(
     )
 
     db.add(db_response)
-    print("📝 Committing to database...")
-    t6 = time.time()
     db.commit()
     db.refresh(db_response)
-    t7 = time.time()
-    print(f"✅ Response saved to database with ID: {db_response.id} ({t7-t6:.2f}s)")
-    print(f"\n⏱️  TOTAL PIPELINE TIMING:")
-    print(f"  Delivery scores: {t1-t0:.2f}s")
-    print(f"  Quality scores:  {t3-t2:.2f}s  ⬅️ This is likely slow on first request")
-    print(f"  FLAN-T5 feedback: {t5-t4:.2f}s")
-    print(f"  Database:        {t7-t6:.2f}s")
-    print(f"  TOTAL:           {t7-t0:.2f}s\n")
     return db_response
 
 

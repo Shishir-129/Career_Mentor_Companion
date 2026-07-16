@@ -72,7 +72,7 @@ class Responses(Base):
     grammar_score = Column(Float)
     confidence_score = Column(Float)
     missed_keywords = Column(Text)
-    llm_feedback = Column(Text)          # FLAN-T5 narrative paragraph
+    llm_feedback = Column(Text)          # Score-derived coaching narrative
     strengths = Column(Text)             # JSON array  e.g. '["Good vocabulary", ...]'
     improvements = Column(Text)          # JSON array  e.g. '["Add examples", ...]'
     speaking_speed = Column(Float)

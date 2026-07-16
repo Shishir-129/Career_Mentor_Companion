@@ -1,17 +1,30 @@
-import { NavLink } from "react-router-dom";
+import { NavLink, useNavigate } from "react-router-dom";
 import './Sidebar.css';
-import { CURRENT_USER } from "../config/user";
+import { getAuth, clearAuth } from "../api/config";
 
 import {
     FiGrid,
     FiPlus,
-    FiClock,
-    FiBarChart2,
     FiAlertCircle,
-    FiSettings
+    FiSettings,
+    FiLogOut,
 } from 'react-icons/fi';
 
 export default function Sidebar() {
+    const navigate = useNavigate();
+    const auth = getAuth();
+    const initials = auth?.fullname
+        ?.split(" ")
+        .map(n => n[0])
+        .join("")
+        .toUpperCase()
+        .slice(0, 2) || "?";
+
+    const handleLogout = () => {
+        clearAuth();
+        navigate("/login", { replace: true });
+    };
+
     return (
         <aside className='sidebar'>
             <div className="logo">
@@ -26,57 +39,29 @@ export default function Sidebar() {
                 <NavLink to='/dashboard' className='nav-item'>
                     <FiGrid /> Dashboard
                 </NavLink>
-
-                <NavLink
-                    to="/new-interview"
-                    className="nav-item"
-                >
-                    <FiPlus />
-                    New Interview
+                <NavLink to="/new-interview" className="nav-item">
+                    <FiPlus /> New Interview
                 </NavLink>
-
-                <NavLink
-                    to="/history"
-                    className="nav-item"
-                >
-                    <FiClock />
-                    History
+                <NavLink to="/weak-areas" className="nav-item">
+                    <FiAlertCircle /> Weak Areas
                 </NavLink>
-
-                <NavLink
-                    to="/analytics"
-                    className="nav-item"
-                >
-                    <FiBarChart2 />
-                    Analytics
-                </NavLink>
-
-                <NavLink
-                    to="/weak-areas"
-                    className="nav-item"
-                >
-                    <FiAlertCircle />
-                    Weak Areas
-                </NavLink>
-
-                <NavLink
-                    to="/settings"
-                    className="nav-item"
-                >
-                    <FiSettings />
-                    Settings
+                <NavLink to="/settings" className="nav-item">
+                    <FiSettings /> Settings
                 </NavLink>
             </nav>
 
-            <div className="user-card">
-                <div className="avatar">{CURRENT_USER.initials}</div>
-
-                <div>
-                    <strong>{CURRENT_USER.name}</strong>
-                    <p>{CURRENT_USER.role}</p>
+            <div className="sidebar-bottom">
+                <div className="user-card">
+                    <div className="avatar">{initials}</div>
+                    <div className="user-info">
+                        <strong>{auth?.fullname || "Guest"}</strong>
+                        <p>{auth?.target_role || ""}</p>
+                    </div>
                 </div>
+                <button className="logout-btn" onClick={handleLogout}>
+                    <FiLogOut /> Sign out
+                </button>
             </div>
-
         </aside>
-    )
+    );
 }

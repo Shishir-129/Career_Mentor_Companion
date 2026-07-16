@@ -49,40 +49,32 @@ def compute_answer_quality_score(
         coaching_tips         — list[str]  (from completeness scorer)
     """
     try:
-        # ── Semantic score ────────────────────────────────────────────────────────
-        print("  📊 Computing semantic score...")
+        # ── Semantic score ─────────────────────────────────────────────────────
         sem = compute_semantic_score(user_answer, ideal_answer)
         semantic_score = sem["score"]
-        print(f"    ✓ Semantic score: {semantic_score}")
 
-        # ── Keyword score ─────────────────────────────────────────────────────────
-        print("  🔑 Computing keyword score...")
+        # ── Keyword score ──────────────────────────────────────────────────────
         if keywords_str and keywords_str.strip():
             keyword_score, missed_keywords = compute_keyword_score(user_answer, keywords_str)
         else:
-            keyword_score  = 0.0
+            keyword_score   = 0.0
             missed_keywords = []
-        print(f"    ✓ Keyword score: {keyword_score}")
 
-        # ── Completeness score ────────────────────────────────────────────────────
-        print("  ✅ Computing completeness score...")
+        # ── Completeness score ─────────────────────────────────────────────────
         comp = compute_completeness_score(
             user_answer=user_answer,
             expected_components_json=expected_components_json,
             ideal_answer=ideal_answer,
         )
         completeness_score = comp["completeness_score"]
-        print(f"    ✓ Completeness score: {completeness_score}")
 
-        # ── Weighted aggregate ────────────────────────────────────────────────────
-        print("  🎯 Computing weighted aggregate...")
+        # ── Weighted aggregate ─────────────────────────────────────────────────
         answer_quality_score = round(
             semantic_score     * WEIGHTS["semantic"]     +
             keyword_score      * WEIGHTS["keyword"]      +
             completeness_score * WEIGHTS["completeness"],
             2,
         )
-        print(f"    ✓ Final score: {answer_quality_score}")
 
         return {
             "answer_quality_score": answer_quality_score,
@@ -95,8 +87,8 @@ def compute_answer_quality_score(
             "coaching_tips":        comp["coaching_tips"],
         }
     except Exception as e:
-        print(f"  ❌ Answer quality scoring error: {type(e).__name__}: {e}")
-        import traceback
+        import logging, traceback
+        logging.getLogger(__name__).error("Answer quality scoring error: %s", e)
         traceback.print_exc()
         # Return safe default on error
         return {
