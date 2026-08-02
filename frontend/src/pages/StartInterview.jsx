@@ -7,6 +7,14 @@ import { FiMic, FiSquare, FiChevronRight } from "react-icons/fi";
 import "./StartInterview.css";
 import { getUserId } from "../api/config";
 
+// Rotating status labels shown while the (up to 3-min) analysis request is in flight
+const SUBMIT_PHASES = [
+    "Uploading your answer\u2026",
+    "Transcribing your speech\u2026",
+    "Scoring your answer\u2026",
+    "Generating your feedback\u2026",
+];
+
 export default function StartInterview() {
     const { state } = useLocation();
     const navigate = useNavigate();
@@ -34,6 +42,18 @@ export default function StartInterview() {
     const [timer, setTimer] = useState(0);
     const timerRef = useRef(null);
     const completedRef = useRef(false);
+
+    // Non-blocking toast (replaces native alert)
+    const [toast, setToast] = useState(null);
+    const toastTimerRef = useRef(null);
+    const showToast = (message, type = "error") => {
+        setToast({ message, type });
+        clearTimeout(toastTimerRef.current);
+        toastTimerRef.current = setTimeout(() => setToast(null), 4500);
+    };
+
+    // Rotating status while the (up to 3-min) analysis request is in flight
+    const [submitPhase, setSubmitPhase] = useState(0);
 
     const userId = getUserId();
 
@@ -72,7 +92,29 @@ export default function StartInterview() {
         return () => clearInterval(timerRef.current);
     }, [recording]);
 
-    // ✅ Mark session as completed when interview finishes
+    // Warn before accidental exit (refresh / tab-close) while a session is in progress
+    useEffect(() => {
+        const handleBeforeUnload = (e) => {
+            if (!done && questions.length > 0) {
+                e.preventDefault();
+                e.returnValue = "";
+            }
+        };
+        window.addEventListener("beforeunload", handleBeforeUnload);
+        return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+    }, [done, questions.length]);
+
+    // Cycle through analysis phase labels while a submission is being scored
+    useEffect(() => {
+        if (!submitting) return;
+        const id = setInterval(
+            () => setSubmitPhase(p => Math.min(p + 1, SUBMIT_PHASES.length - 1)),
+            3000,
+        );
+        return () => clearInterval(id);
+    }, [submitting]);
+
+    //  Mark session as completed when interview finishes
     useEffect(() => {
         const markComplete = async () => {
             if (sessionId && !completedRef.current) {
@@ -106,7 +148,7 @@ export default function StartInterview() {
         try {
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
             
-            // ✅ Try to use WAV MIME type if available, fallback to WebM
+            // Try to use WAV MIME type if available, fallback to WebM
             const mimeTypes = [
                 "audio/wav",
                 "audio/mp4",
@@ -138,7 +180,7 @@ export default function StartInterview() {
             mediaRecorder.start();
             setRecording(true);
         } catch {
-            alert("Microphone access denied. Please allow microphone.");
+            showToast("Microphone access denied. Please allow microphone access and try again.");
             return;
         }
 
@@ -172,6 +214,7 @@ export default function StartInterview() {
 
     const submitAnswer = async () => {
         if (!audioBlob) return;
+        setSubmitPhase(0);
         setSubmitting(true);
         try {
             console.log(`📤 Submitting audio: ${audioBlob.size} bytes, type: ${audioBlob.type}`);
@@ -187,7 +230,7 @@ export default function StartInterview() {
         } catch (err) {
             console.error("Submission error:", err);
             const errorMsg = err.response?.data?.detail || err.message || "Failed to submit answer. Please try again.";
-            alert(errorMsg);
+            showToast(errorMsg);
         } finally {
             setSubmitting(false);
         }
@@ -296,6 +339,13 @@ export default function StartInterview() {
             <Sidebar />
             <div className="si-wrapper">
 
+                {toast && (
+                    <div className={`si-toast si-toast-${toast.type}`} role="alert">
+                        <span>{toast.message}</span>
+                        <button className="si-toast-close" onClick={() => setToast(null)} aria-label="Dismiss">×</button>
+                    </div>
+                )}
+
                 {/* Top bar */}
                 <div className="si-topbar">
                     <span className="si-progress-label">
@@ -356,6 +406,16 @@ export default function StartInterview() {
                                         {submitting ? "⏳ Analysing..." : "✅ Submit Answer"}
                                     </button>
                                 </div>
+                            </div>
+                        )}
+
+                        {/* Analysis progress — shown while scoring is in flight */}
+                        {submitting && (
+                            <div className="si-analysis-progress">
+                                <div className="si-analysis-bar">
+                                    <div className="si-analysis-bar-fill" />
+                                </div>
+                                <p className="si-analysis-text">{SUBMIT_PHASES[submitPhase]}</p>
                             </div>
                         )}
 

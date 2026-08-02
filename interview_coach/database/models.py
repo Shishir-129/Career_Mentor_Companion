@@ -79,6 +79,8 @@ class Responses(Base):
     pause_count = Column(Integer)
     filler_count = Column(Integer)
     audio_file_path = Column(String)
+    predicted_score = Column(Float, nullable=True)     # ML model's prediction, when available
+    final_human_score = Column(Float, nullable=True)   # ground-truth label for retraining
     created_at = Column(DateTime, default=now)
 
 

@@ -52,6 +52,8 @@ class ResponseResponse(BaseModel):
     pause_count: Optional[int]
     filler_count: Optional[int]
     audio_file_path: Optional[str]
+    predicted_score: Optional[float] = None
+    final_human_score: Optional[float] = None
     created_at: datetime
 
     @field_validator("strengths", "improvements", mode="before")
@@ -81,3 +83,9 @@ class ResponseScoreUpdate(BaseModel):
     pause_count: Optional[int] = None
     filler_count: Optional[int] = None
     audio_file_path: Optional[str] = None
+    predicted_score: Optional[float] = None
+    final_human_score: Optional[float] = None
+
+
+class HumanFeedbackUpdate(BaseModel):
+    actual_score: float

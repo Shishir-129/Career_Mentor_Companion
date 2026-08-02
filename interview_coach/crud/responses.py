@@ -14,6 +14,7 @@ from schemas.response import ResponseCreate, ResponseScoreUpdate
 from services.confidence_scoring import analyze_audio, compute_delivery_scores
 from services.answer_quality_scorer import compute_answer_quality_score
 from services.feedback_generator import generate_feedback
+from services.adaptive_scorer import adaptive_scorer
 
 
 def create_response(db: Session, response: ResponseCreate):
@@ -92,6 +93,19 @@ def create_response_from_audio(
         print(f"    - Whisper failed silently")
         
         # Return a response with default values for empty transcript
+        empty_predicted = adaptive_scorer.predict(
+            features={
+                "semantic_score":     0.0,
+                "keyword_score":      0.0,
+                "completeness_score": 0.0,
+                "grammar_score":      0.0,
+                "confidence_score":   0.0,
+                "speaking_speed":     0.0,
+                "pause_count":        0,
+                "filler_count":       0.0,
+            },
+            fallback_score=0.0,
+        )
         db_response = Responses(
             session_id=session_id,
             user_id=user_id,
@@ -112,6 +126,7 @@ def create_response_from_audio(
             llm_feedback="Unable to analyze audio. Please check your microphone and try again with clear speech.",
             strengths=json.dumps([]),
             improvements=json.dumps(["Ensure microphone is working", "Speak clearly during recording"]),
+            predicted_score=empty_predicted,
         )
         db.add(db_response)
         db.commit()
@@ -160,6 +175,23 @@ def create_response_from_audio(
         transcript=transcript,
     )
 
+    # ── 5b. Adaptive (ML) scoring — sits beside the fixed scorers above,
+    #        never replaces them. Falls back to answer_quality_score unchanged
+    #        whenever no trained model exists yet. ─────────────────────────────
+    predicted_score = adaptive_scorer.predict(
+        features={
+            "semantic_score":     quality["semantic_score"],
+            "keyword_score":      quality["keyword_score"],
+            "completeness_score": quality["completeness_score"],
+            "grammar_score":      conf["grammar_score"],
+            "confidence_score":   conf["confidence_score"],
+            "speaking_speed":     conf["speaking_speed"],
+            "pause_count":        conf["pause_count"],
+            "filler_count":       conf["filler_count"],
+        },
+        fallback_score=quality["answer_quality_score"],
+    )
+
     # ── 6. Save response to database ─────────────────────────────────────────
     db_response = Responses(
         session_id=session_id,
@@ -185,6 +217,8 @@ def create_response_from_audio(
         llm_feedback=feedback["narrative_feedback"],
         strengths=json.dumps(feedback["strengths"]),
         improvements=json.dumps(feedback["improvements"]),
+        # Adaptive scoring
+        predicted_score=predicted_score,
     )
 
     db.add(db_response)

@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
-from schemas.response import ResponseCreate, ResponseResponse, ResponseScoreUpdate
+from schemas.response import ResponseCreate, ResponseResponse, ResponseScoreUpdate, HumanFeedbackUpdate
 from crud.responses import (
     create_response,
     get_response,
@@ -11,6 +11,7 @@ from crud.responses import (
     delete_response
 )
 from database.connection import get_db
+from services.adaptive_scorer import adaptive_scorer
 
 router = APIRouter(prefix="/responses", tags=["Responses"])
 
@@ -41,6 +42,14 @@ def read_response(response_id: int, db: Session = Depends(get_db)):
 @router.patch("/{response_id}/score", response_model=ResponseResponse)
 def score_response(response_id: int, data: ResponseScoreUpdate, db: Session = Depends(get_db)):
     response = update_response_score(db, response_id, data)
+    if not response:
+        raise HTTPException(status_code=404, detail="Response not found")
+    return response
+
+
+@router.patch("/{response_id}/human-feedback", response_model=ResponseResponse)
+def submit_human_feedback(response_id: int, data: HumanFeedbackUpdate, db: Session = Depends(get_db)):
+    response = adaptive_scorer.record_human_feedback(db, response_id, data.actual_score)
     if not response:
         raise HTTPException(status_code=404, detail="Response not found")
     return response

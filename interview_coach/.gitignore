@@ -29,6 +29,9 @@ uploads/
 *.mp3
 *.webm
 
+# ML model artifacts
+ml_models/*.pkl
+
 # Database
 *.db
 *.sqlite 
