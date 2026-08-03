@@ -6,6 +6,7 @@ import StartInterview from "./pages/StartInterview";
 import Dashboard from "./pages/Dashboard";
 import Settings from "./pages/Settings";
 import WeakAreas from "./pages/WeakAreas";
+import ReviewTrain from "./pages/ReviewTrain";
 
 function RequireAuth({ children }) {
     return getAuth() ? children : <Navigate to="/login" replace />;
@@ -21,6 +22,7 @@ export default function App() {
             <Route path="/interview" element={<RequireAuth><StartInterview /></RequireAuth>} />
             <Route path="/settings" element={<RequireAuth><Settings /></RequireAuth>} />
             <Route path="/weak-areas" element={<RequireAuth><WeakAreas /></RequireAuth>} />
+            <Route path="/review-train" element={<RequireAuth><ReviewTrain /></RequireAuth>} />
             <Route path="*" element={<Navigate to="/dashboard" replace />} />
         </Routes>
     );

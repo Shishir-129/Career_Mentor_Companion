@@ -79,3 +79,24 @@ export const completeSession = async (sessionId) => {
         throw err;
     }
 };
+
+// ── Adaptive scoring / human-in-the-loop review ─────────────────────────────
+// GET /responses/user/{user_id} — all responses (with scores) for review/labeling
+export const getResponsesByUser = async (userId) => {
+    const res = await axios.get(`${BASE_URL}/responses/user/${userId}`);
+    return res.data;
+};
+
+// PATCH /responses/{response_id}/human-feedback — save a reviewer's ground-truth score (0–100)
+export const submitHumanFeedback = async (responseId, actualScore) => {
+    const res = await axios.patch(`${BASE_URL}/responses/${responseId}/human-feedback`, {
+        actual_score: actualScore,
+    });
+    return res.data;
+};
+
+// POST /responses/retrain-model — retrain the adaptive model on all labeled responses
+export const retrainScoringModel = async () => {
+    const res = await axios.post(`${BASE_URL}/responses/retrain-model`);
+    return res.data;
+};

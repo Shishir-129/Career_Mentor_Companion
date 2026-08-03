@@ -1,5 +1,5 @@
 from __future__ import annotations
-from pydantic import BaseModel, ConfigDict, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from typing import Optional
 from datetime import datetime
 import json
@@ -88,4 +88,5 @@ class ResponseScoreUpdate(BaseModel):
 
 
 class HumanFeedbackUpdate(BaseModel):
-    actual_score: float
+    # scores are on a 0–100 scale, same as answer_quality_score
+    actual_score: float = Field(..., ge=0, le=100)

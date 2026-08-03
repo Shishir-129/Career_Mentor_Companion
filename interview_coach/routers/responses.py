@@ -55,6 +55,12 @@ def submit_human_feedback(response_id: int, data: HumanFeedbackUpdate, db: Sessi
     return response
 
 
+@router.post("/retrain-model")
+def retrain_model(db: Session = Depends(get_db)):
+    """Retrains the adaptive scoring model on all human-labeled responses."""
+    return adaptive_scorer.retrain_from_db(db)
+
+
 @router.delete("/{response_id}", response_model=ResponseResponse)
 def remove_response(response_id: int, db: Session = Depends(get_db)):
     response = delete_response(db, response_id)

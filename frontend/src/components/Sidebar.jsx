@@ -8,6 +8,7 @@ import {
     FiAlertCircle,
     FiSettings,
     FiLogOut,
+    FiCheckSquare,
 } from 'react-icons/fi';
 
 export default function Sidebar() {
@@ -44,6 +45,9 @@ export default function Sidebar() {
                 </NavLink>
                 <NavLink to="/weak-areas" className="nav-item">
                     <FiAlertCircle /> Weak Areas
+                </NavLink>
+                <NavLink to="/review-train" className="nav-item">
+                    <FiCheckSquare /> Review &amp; Train
                 </NavLink>
                 <NavLink to="/settings" className="nav-item">
                     <FiSettings /> Settings
