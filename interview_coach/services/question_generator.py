@@ -60,6 +60,9 @@ def _fetch_candidates(db, role, level, interview_type, difficulty_norm):
         .filter(
             Questions.role == role,
             Questions.question_text.isnot(None),
+            Questions.ideal_answer.isnot(None),
+            Questions.verified == True,
+            Questions.code_expected == False,
         )
     )
 
