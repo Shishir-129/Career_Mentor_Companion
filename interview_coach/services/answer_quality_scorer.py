@@ -30,6 +30,7 @@ def compute_answer_quality_score(
     ideal_answer: str,
     keywords_str: str | None,
     expected_components_json: str | None,
+    question_text: str = "",
 ) -> dict:
     """
     Aggregates three sub-scores into a single Answer Quality Score.
@@ -65,6 +66,7 @@ def compute_answer_quality_score(
             user_answer=user_answer,
             expected_components_json=expected_components_json,
             ideal_answer=ideal_answer,
+            question_text=question_text,
         )
         completeness_score = comp["completeness_score"]
 

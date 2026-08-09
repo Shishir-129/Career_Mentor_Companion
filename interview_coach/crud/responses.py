@@ -125,21 +125,24 @@ def create_response_from_audio(
     ideal_answer        = (question.ideal_answer        or "") if question else ""
     keywords_str        = (question.keywords            or "") if question else ""
     expected_components = (question.expected_components or "") if question else ""
+    q_text              = (question.question_text       or "") if question else ""
     print(f"✓ Question fetched")
 
-    # ── 3. Confidence / delivery scoring ─────────────────────────────────────
+    # ── 3. Confidence / delivery scoring ─────────────────────────────────────────
     conf = compute_delivery_scores(
         transcript=transcript,
         duration_secs=audio_data["duration_secs"],
         pause_count=audio_data["pause_count"],
+        question_text=q_text,
     )
 
-    # ── 4. Answer quality scoring (transcript vs ideal answer) ───────────────
+    # ── 4. Answer quality scoring (transcript vs ideal answer) ────────────────────
     quality = compute_answer_quality_score(
         user_answer=transcript,
         ideal_answer=ideal_answer,
         keywords_str=keywords_str,
         expected_components_json=expected_components,
+        question_text=q_text,
     )
 
     # ── 5. Generate feedback ──────────────────────────────────────────────────
