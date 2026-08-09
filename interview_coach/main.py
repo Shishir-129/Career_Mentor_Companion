@@ -1,4 +1,5 @@
-import traceback
+import logging
+from contextlib import asynccontextmanager
 from pathlib import Path
 from uuid import uuid4
 
@@ -6,7 +7,6 @@ from fastapi import Depends, FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 
-import librosa
 import whisper
 
 from crud.responses import create_response_from_audio
@@ -17,16 +17,40 @@ from routers.sessions import router as session_router
 from routers.responses import router as response_router
 from routers import weak_areas
 from routers import question_history
-from schemas.response import ResponseCreate, ResponseResponse
+from schemas.response import ResponseResponse
+
+log = logging.getLogger("uvicorn.error")
 
 Base.metadata.create_all(bind=engine)
 
-app = FastAPI(title="Interview Coach API")
 
-# ✅ CORS — allow React dev server
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Pre-warm all AI models on startup to avoid first-request latency."""
+    log.info("Loading AI models...")
+    try:
+        get_whisper_model()
+        log.info("Whisper ready")
+
+        from services.semantic_score import get_model
+        get_model()
+        log.info("Sentence-transformers ready")
+
+        import spacy
+        spacy.load("en_core_web_sm")
+        log.info("spaCy ready")
+
+        log.info("All models loaded — API is ready")
+    except Exception as exc:
+        log.warning("Model warmup partial failure: %s (will load on first request)", exc)
+    yield
+
+
+app = FastAPI(title="Interview Coach API", lifespan=lifespan)
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],
+    allow_origins=["http://localhost:5173", "http://localhost:5174"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -52,15 +76,13 @@ def get_whisper_model():
     return _MODEL
 
 
-def transcribe_audio(file_path: str):
-    print("Loading and preprocessing audio with Librosa...")
-    audio_data, _ = librosa.load(file_path, sr=16000, mono=True)
-
-    print("Transcribing with cached Whisper model...")
+def transcribe_audio(file_path: str) -> str:
     model = get_whisper_model()
-    result = model.transcribe(audio_data, fp16=False)
-
-    return result.get("text", "").strip()
+    result = model.transcribe(file_path, fp16=False)
+    transcription = result.get("text", "").strip()
+    if not transcription:
+        log.warning("Empty transcription for %s (size: %d bytes)", file_path, Path(file_path).stat().st_size)
+    return transcription
 
 
 @app.post("/responses/upload-audio", response_model=ResponseResponse)
@@ -86,17 +108,7 @@ async def upload_and_store_transcript(
             transcribe_fn=transcribe_audio,
         )
     except HTTPException:
-        raise  # re-raise FastAPI HTTP exceptions as-is
-    except Exception as e:
-        traceback.print_exc()  # ← prints full traceback to terminal
-        raise HTTPException(status_code=500, detail=f"Internal error: {e}")
-
-
-if __name__ == "__main__":
-    audio_file = "sample.wav"
-    try:
-        transcription = transcribe_audio(audio_file)
-        print("\n--- Transcription Result ---")
-        print(transcription)
-    except Exception as e:
-        print(f"An error occurred: {e}")
+        raise
+    except Exception as exc:
+        log.exception("Error processing audio response")
+        raise HTTPException(status_code=500, detail=f"{type(exc).__name__}: {str(exc)[:200]}")

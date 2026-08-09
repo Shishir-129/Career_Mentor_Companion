@@ -1,0 +1,284 @@
+﻿================================================================================
+WHAT IS THE PROJECT?
+================================================================================
+An AI-powered web application that acts as a personal interview coach
+for the Data Science domain. Candidates register, select a role, experience
+level, difficulty, and interview type. The system presents tailored questions,
+records their spoken answer, transcribes it with Whisper, evaluates answer
+quality and delivery confidence, generates score-based coaching feedback, and
+displays everything on a performance dashboard.
+
+Domain: Data Science (Data Analyst, Data Scientist, DevOps Engineer)
+Type:   Practice & self-improvement tool -- NOT a recruitment decision tool
+
+
+================================================================================
+PROBLEM BEING SOLVED
+================================================================================
+- Students and graduates underperform in interviews not due to lack of
+  knowledge but lack of practice and timely feedback.
+- Existing resources (question banks, YouTube, peer practice) are static,
+  general, and give no objective feedback on answers or speaking style.
+- Human mock interview coaches are expensive, unavailable on-demand,
+  and inconsistent.
+- No single open-source system combines: role-specific questions +
+  semantic answer evaluation + audio confidence analysis + dashboard.
+
+
+================================================================================
+OBJECTIVES
+================================================================================
+1. Build an AI mock interview system that selects role-specific questions,
+   converts spoken answers to text, and evaluates content + confidence.
+2. Provide automated, personalized feedback and performance scores that
+   help candidates measurably improve their interview skills.
+
+
+================================================================================
+SYSTEM ARCHITECTURE (Client-Server, Modular)
+================================================================================
+
+  USER (Candidate)
+      |
+      v
+  FRONTEND -- React.js (JavaScript) + Vite + Recharts
+      |
+      | REST API (email/password auth, argon2 hashing)
+      v
+  BACKEND -- FastAPI (Python 3.12) + Uvicorn
+      |
+      |-----> Question Selection  (sentence-transformers diversity algorithm)
+      |-----> Speech-to-Text      (OpenAI Whisper base)
+      |-----> Answer Evaluation   (sentence-transformers + spaCy)
+      |-----> Confidence Analysis (Librosa + text-based grammar scoring)
+      |-----> Coaching Feedback   (rule-based, score-derived)
+      |
+      |-----> PostgreSQL Database (SQLAlchemy ORM, hosted on Neon)
+
+
+================================================================================
+MODULE-BY-MODULE BREAKDOWN
+================================================================================
+
+--- MODULE 1: QUESTION SELECTION ---
+How:   Greedy semantic diversity selection using sentence-transformers
+Input: Role + Experience Level + Difficulty + Interview Type (from user)
+Output: 5 topically diverse questions from the PostgreSQL question bank
+
+Selection algorithm:
+  1. Filter pool by role + experience_level + question_type + difficulty (80 max)
+     Progressive fallback: loosen difficulty -> drop type -> drop level
+  2. Seed: pick the verified + least-asked question matching the difficulty
+  3. Each next pick: maximize (1 - max_cosine_similarity_to_already_selected)
+     + small bonus for verified questions and low times_asked count
+  4. Increment times_asked for selected questions after the session
+
+Why semantic diversity matters:
+  Pure random sampling often picks questions on the same topic.
+  The embedding-based approach ensures each session covers different
+  concepts (not five questions all about SQL joins).
+
+Difficulty + experience mapping:
+  Fresher  -> conceptual definitions ("What is overfitting?")
+  Junior   -> application ("How do you handle class imbalance?")
+  Mid      -> trade-offs ("Compare SMOTE vs cost-sensitive learning")
+  Senior   -> architecture ("Design a real-time fraud detection pipeline")
+
+Database model (PostgreSQL):
+  questions -- id, role, topic, subtopic, difficulty, experience_level,
+               question_type, question_text, ideal_answer, keywords,
+               expected_components, code_expected, verified, times_asked, created_at
+
+Question data source:
+  Scraped from github.com/alexeygrigorev/data-science-interviews using
+  BeautifulSoup. Keywords extracted by KeyBERT at seeding time and stored
+  in the DB. Difficulty inferred from emoji markers (baby=easy, star=medium,
+  rocket=hard).
+
+
+--- MODULE 2: SPEECH-TO-TEXT ---
+Tool:  OpenAI Whisper (open-source, runs locally)
+Model: base -- trained on 680,000 hours of multilingual audio
+Input: Candidate's recorded audio (WAV/MP3/WebM from browser)
+Output: Text transcript
+Why Whisper: Handles accents, background noise, varied speech -- no API cost
+Paper: Radford et al., 2022 -- arXiv:2212.04356
+
+Implementation notes:
+  - Audio saved temporarily, Whisper transcribes, file deleted immediately
+  - Whisper transcription and Librosa analysis run in parallel
+    (ThreadPoolExecutor) to reduce total processing time
+
+
+--- MODULE 3: ANSWER EVALUATION ---
+Tools: sentence-transformers (SBERT) + spaCy + pattern matching
+
+Step 1 -- Semantic Similarity (SBERT):
+  - Candidate transcript -> all-MiniLM-L6-v2 embedding vector
+  - Ideal answer (stored in DB) -> all-MiniLM-L6-v2 embedding vector
+  - Cosine similarity, scaled to 0-100
+  - >=85 = Excellent | >=65 = Good | >=45 = Average | <45 = Poor
+  - Paper: Reimers & Gurevych, EMNLP 2019 -- arXiv:1908.10084
+
+Step 2 -- Keyword Coverage (spaCy):
+  - Lemmatize transcript and each expected keyword with en_core_web_sm
+  - Check if lemmatized keyword appears in lemmatized transcript
+  - Score = (matched / total_expected) * 100
+
+Step 3 -- Completeness Score (pattern matching):
+  - Detect structural components: definition, example, explanation,
+    comparison, use_case, limitation -- using phrase pattern matching
+  - Verified against ideal answer first: only penalised if ideal answer
+    also demonstrates the component
+  - Score = (found / expected) * 100
+
+Answer Quality Score:
+  = 0.50 * Semantic + 0.30 * Keyword + 0.20 * Completeness
+
+
+--- MODULE 4: CONFIDENCE ANALYSIS ---
+Tool: Librosa (audio) + text-based scoring
+
+Feature 1 -- Grammar Quality (35% weight):
+  - Type-token ratio, sentence length naturalness, repetition penalty
+  - Normalized to 0-100
+
+Feature 2 -- Filler Word Rate (30% weight):
+  - Counts: "um", "uh", "you know", "basically", "literally", etc.
+  - Rate per 100 words (longer answers not unfairly penalized)
+  - <=1/100 words = excellent | >10/100 words = very poor
+
+Feature 3 -- Speaking Pace (20% weight):
+  - WPM = (word count / audio duration) * 60
+  - 120-155 WPM = Excellent | else progressively lower
+
+Feature 4 -- Hesitation Pauses (15% weight):
+  - librosa.effects.split() detects silence gaps > 1 second
+  - Rate per minute (longer answers not penalized)
+
+Confidence Score:
+  = 0.35 * Grammar + 0.30 * Filler + 0.20 * Pace + 0.15 * Pause
+
+Research backing: Naim et al. (2018) -- IEEE Transactions on Affective
+  Computing -- validated that pace, filler words, and pauses correlate
+  with interview performance ratings (r = 0.75+)
+
+
+--- MODULE 5: COACHING FEEDBACK ---
+Method: Score-derived rule-based narrative (not LLM)
+
+How it works:
+  1. All scores passed to feedback_generator.py
+  2. Strengths: populated for each dimension scoring >= 65
+  3. Improvements: from coaching_tips (missing components) + missed keywords
+  4. Narrative paragraph:
+     - Opening: answer_quality band (80+ / 65+ / 45+ / <45)
+     - Middle: diagnostic comparing semantic vs keyword scores
+     - Improvement: single most impactful coaching action
+     - Closing: delivery coaching based on confidence band
+
+Why not LLM:
+  flan-t5-base echoed prompt instructions instead of generating feedback.
+  The rule-based approach is faster, always reliable, and more specific
+  because it directly uses the actual numeric scores and identified gaps.
+
+Final Overall Score:
+  = Answer Quality * 0.70 + Confidence * 0.30
+
+
+--- MODULE 6: DASHBOARD & SKILL ANALYSIS ---
+Tools: Recharts (frontend) + FastAPI aggregation
+
+Dashboard displays:
+  - Completed count, avg score, best score, avg answer quality, avg confidence
+  - Performance Trend chart (answer quality + confidence over sessions)
+  - Recent sessions list with per-session scores and status
+
+Skill Analysis page (Weak Areas):
+  - Averages 5 score dimensions across completed sessions:
+    Conceptual Understanding (semantic), Technical Vocabulary (keyword),
+    Answer Structure (completeness), Delivery & Confidence, Language Clarity
+  - Sorted weakest-first with color-coded severity
+  - Expandable coaching tips per dimension
+
+
+================================================================================
+FULL TECH STACK
+================================================================================
+
+Category              | Technology
+----------------------|------------------------------------------
+Frontend              | React 19 (JavaScript), Vite, Recharts, react-icons
+Backend               | FastAPI (Python 3.12), Uvicorn
+Database              | PostgreSQL + SQLAlchemy ORM (Neon or local)
+Authentication        | argon2 hashing (pwdlib), localStorage session
+Speech-to-Text        | OpenAI Whisper (base, local)
+Semantic Scoring      | sentence-transformers (all-MiniLM-L6-v2, local)
+Question Selection    | sentence-transformers (greedy diversity, same model)
+Keyword Scoring       | spaCy (en_core_web_sm, local)
+Keyword Extraction    | KeyBERT (seeding time only, result stored in DB)
+Confidence Analysis   | Librosa + text grammar scoring
+Coaching Feedback     | Rule-based narrative from score data
+File Storage          | Local uploads/ dir (audio deleted after transcription)
+
+
+================================================================================
+AUTHENTICATION FLOW
+================================================================================
+
+Registration:
+  User submits fullname + email + password + target_role
+  -> argon2 hash stored in PostgreSQL users table
+  -> { id, fullname, email, target_role } returned
+  -> Saved in browser localStorage as "auth" object
+
+Login:
+  User submits email + password
+  -> Backend fetches user by email, verifies argon2 hash
+  -> Returns user object if valid, 401 if not
+  -> Saved in browser localStorage
+
+Session management:
+  - All pages read userId from localStorage via getUserId()
+  - Sign out clears localStorage, redirects to login
+  - No JWT tokens -- stateless trust on the frontend side
+  - Suitable for academic/demo context
+
+
+================================================================================
+SCORING REFERENCE
+================================================================================
+
+Answer Quality Score (0-100):
+  Semantic similarity     50%  (all-MiniLM-L6-v2 cosine similarity)
+  Keyword coverage        30%  (spaCy lemmatized matching)
+  Structural completeness 20%  (phrase pattern detection)
+
+Confidence Score (0-100):
+  Grammar quality         35%  (TTR + sentence length + repetition)
+  Filler word rate        30%  (um, uh, basically, literally, etc.)
+  Speaking pace           20%  (WPM, ideal 120-155)
+  Hesitation pauses       15%  (gaps > 1s via librosa)
+
+Overall Session Score:
+  Answer Quality * 0.70 + Confidence * 0.30
+
+Score Labels:
+  >= 85 = Excellent | >= 65 = Good | >= 45 = Average | < 45 = Poor
+
+
+================================================================================
+FEASIBILITY SUMMARY
+================================================================================
+
+Technical:   All tools are open-source, pre-trained, run locally.
+             No model training from scratch. No API costs at runtime.
+Economic:    Total estimated cost = NPR 4,000 (cloud DB hosting only).
+Operational: Requires only a browser + microphone.
+Legal:       Audio deleted immediately after transcription.
+             Passwords hashed with argon2. No plain-text credentials stored.
+
+
+================================================================================
+END OF REFERENCE SHEET
+================================================================================

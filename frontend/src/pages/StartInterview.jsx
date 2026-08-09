@@ -5,6 +5,7 @@ import Sidebar from "../components/Sidebar";
 import { createSession, getQuestionsForSession, submitAudioResponse, completeSession } from "../api/interviewApi";
 import { FiMic, FiSquare, FiChevronRight } from "react-icons/fi";
 import "./StartInterview.css";
+import { getUserId } from "../api/config";
 
 export default function StartInterview() {
     const { state } = useLocation();
@@ -32,9 +33,9 @@ export default function StartInterview() {
 
     const [timer, setTimer] = useState(0);
     const timerRef = useRef(null);
-    const completedRef = useRef(false); // ✅ Track if session completion has been called
+    const completedRef = useRef(false);
 
-    const userId = 1;
+    const userId = getUserId();
 
     useEffect(() => {
         if (!role) { navigate("/new-interview"); return; }
@@ -44,8 +45,9 @@ export default function StartInterview() {
                 setSessionId(sessionData.id);
                 const questionsData = await getQuestionsForSession(
                     role,
-                    experience,        // ✅ "fresher" / "junior" / "mid-level" / "senior"
-                    interviewType,     // ✅ passed as-is, backend handles case-insensitive
+                    experience,
+                    interviewType,
+                    difficulty,
                     5
                 );
                 setQuestions(questionsData);
@@ -103,11 +105,32 @@ export default function StartInterview() {
 
         try {
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            const mediaRecorder = new MediaRecorder(stream);
+            
+            // ✅ Try to use WAV MIME type if available, fallback to WebM
+            const mimeTypes = [
+                "audio/wav",
+                "audio/mp4",
+                "audio/ogg",
+                "audio/webm"
+            ];
+            let selectedMimeType = "audio/webm"; // default fallback
+            for (const mimeType of mimeTypes) {
+                if (MediaRecorder.isTypeSupported(mimeType)) {
+                    selectedMimeType = mimeType;
+                    if (mimeType.includes("wav") || mimeType.includes("mp4")) {
+                        // Prefer WAV or MP4 over WebM
+                        break;
+                    }
+                }
+            }
+            
+            console.log(`📻 Recording with MIME type: ${selectedMimeType}`);
+            const mediaRecorder = new MediaRecorder(stream, { mimeType: selectedMimeType });
             mediaRecorderRef.current = mediaRecorder;
             mediaRecorder.ondataavailable = (e) => { if (e.data.size > 0) chunksRef.current.push(e.data); };
             mediaRecorder.onstop = () => {
-                const blob = new Blob(chunksRef.current, { type: "audio/webm" });
+                const blob = new Blob(chunksRef.current, { type: selectedMimeType });
+                console.log(`💾 Recording complete: ${blob.size} bytes, type: ${blob.type}`);
                 setAudioBlob(blob);
                 setAudioURL(URL.createObjectURL(blob));
                 stream.getTracks().forEach((t) => t.stop());
@@ -151,6 +174,8 @@ export default function StartInterview() {
         if (!audioBlob) return;
         setSubmitting(true);
         try {
+            console.log(`📤 Submitting audio: ${audioBlob.size} bytes, type: ${audioBlob.type}`);
+            
             const result = await submitAudioResponse({
                 sessionId, userId,
                 questionId: currentQuestion.id,
@@ -160,8 +185,9 @@ export default function StartInterview() {
             });
             setFeedback(result);
         } catch (err) {
-            console.error(err);
-            alert("Failed to submit answer.");
+            console.error("Submission error:", err);
+            const errorMsg = err.response?.data?.detail || err.message || "Failed to submit answer. Please try again.";
+            alert(errorMsg);
         } finally {
             setSubmitting(false);
         }
@@ -337,14 +363,32 @@ export default function StartInterview() {
                         {feedback && (
                             <div className="si-feedback">
                                 <h3>📊 Feedback</h3>
+                                
+                                {/* Main scores - simplified view */}
                                 <div className="si-score-grid">
                                     <ScoreBox label="Answer Quality" value={feedback.answer_quality_score} />
-                                    <ScoreBox label="Semantic" value={feedback.semantic_score} />
-                                    <ScoreBox label="Keywords" value={feedback.keyword_score} />
                                     <ScoreBox label="Confidence" value={feedback.confidence_score} />
-                                    <ScoreBox label="Grammar" value={feedback.grammar_score} />
-                                    <ScoreBox label="Completeness" value={feedback.completeness_score} />
                                 </div>
+
+                                {/* Score breakdowns - collapsible */}
+                                <details className="si-score-details">
+                                    <summary>📈 Answer Quality Breakdown</summary>
+                                    <div className="si-score-grid">
+                                        <ScoreBox label="Semantic" value={feedback.semantic_score} />
+                                        <ScoreBox label="Keywords" value={feedback.keyword_score} />
+                                        <ScoreBox label="Completeness" value={feedback.completeness_score} />
+                                    </div>
+                                </details>
+
+                                <details className="si-score-details">
+                                    <summary>📈 Confidence Breakdown</summary>
+                                    <div className="si-score-grid">
+                                        <ScoreBox label="Grammar" value={feedback.grammar_score} />
+                                        <ScoreBox label="Speaking Pace" value={Math.round(feedback.speaking_speed)} suffix=" WPM" />
+                                        <ScoreBox label="Filler Words" value={100 - (feedback.filler_count * 10)} />
+                                        <ScoreBox label="Long Pauses" value={100 - (feedback.pause_count * 10)} />
+                                    </div>
+                                </details>
 
                                 {feedback.transcript && (
                                     <div className="si-fb-block">
@@ -354,7 +398,7 @@ export default function StartInterview() {
                                 )}
                                 {feedback.llm_feedback && (
                                     <div className="si-fb-block">
-                                        <h4>💬 AI Feedback</h4>
+                                        <h4>� Coaching Feedback</h4>
                                         <p>{feedback.llm_feedback}</p>
                                     </div>
                                 )}
@@ -362,13 +406,23 @@ export default function StartInterview() {
                                     {feedback.strengths && (
                                         <div className="si-fb-block green">
                                             <h4>✅ Strengths</h4>
-                                            <p>{feedback.strengths}</p>
+                                            <ul>
+                                                {Array.isArray(feedback.strengths) 
+                                                    ? feedback.strengths.map((s, i) => <li key={i}>{s}</li>)
+                                                    : <li>{feedback.strengths}</li>
+                                                }
+                                            </ul>
                                         </div>
                                     )}
                                     {feedback.improvements && (
                                         <div className="si-fb-block orange">
                                             <h4>🔧 Improvements</h4>
-                                            <p>{feedback.improvements}</p>
+                                            <ul>
+                                                {Array.isArray(feedback.improvements)
+                                                    ? feedback.improvements.map((imp, i) => <li key={i}>{imp}</li>)
+                                                    : <li>{feedback.improvements}</li>
+                                                }
+                                            </ul>
                                         </div>
                                     )}
                                 </div>
@@ -440,16 +494,16 @@ export default function StartInterview() {
     );
 }
 
-function ScoreBox({ label, value }) {
-    if (value == null || value === 0) return null;
+function ScoreBox({ label, value, suffix = "%" }) {
+    if (value == null || value === 0 || (suffix === "%" && value === 0)) return null;
     
-    // ✅ FIX: Backend returns 0-100, don't multiply again!
+    // ✅ Backend returns 0-100, don't multiply again!
     const pct = Math.round(value);
     const color = pct >= 70 ? "#4ade80" : pct >= 40 ? "#facc15" : "#f87171";
     
     return (
         <div className="si-score-box">
-            <div className="si-score-value" style={{ color }}>{pct}%</div>
+            <div className="si-score-value" style={{ color }}>{pct}{suffix}</div>
             <div className="si-score-label">{label}</div>
         </div>
     );

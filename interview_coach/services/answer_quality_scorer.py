@@ -30,6 +30,7 @@ def compute_answer_quality_score(
     ideal_answer: str,
     keywords_str: str | None,
     expected_components_json: str | None,
+    question_text: str = "",
 ) -> dict:
     """
     Aggregates three sub-scores into a single Answer Quality Score.
@@ -48,40 +49,57 @@ def compute_answer_quality_score(
         components_missing    — list[str]
         coaching_tips         — list[str]  (from completeness scorer)
     """
-    # ── Semantic score ────────────────────────────────────────────────────────
-    sem = compute_semantic_score(user_answer, ideal_answer)
-    semantic_score = sem["score"]
+    try:
+        # ── Semantic score ─────────────────────────────────────────────────────
+        sem = compute_semantic_score(user_answer, ideal_answer)
+        semantic_score = sem["score"]
 
-    # ── Keyword score ─────────────────────────────────────────────────────────
-    if keywords_str and keywords_str.strip():
-        keyword_score, missed_keywords = compute_keyword_score(user_answer, keywords_str)
-    else:
-        keyword_score  = 0.0
-        missed_keywords = []
+        # ── Keyword score ──────────────────────────────────────────────────────
+        if keywords_str and keywords_str.strip():
+            keyword_score, missed_keywords = compute_keyword_score(user_answer, keywords_str)
+        else:
+            keyword_score   = 0.0
+            missed_keywords = []
 
-    # ── Completeness score ────────────────────────────────────────────────────
-    comp = compute_completeness_score(
-        user_answer=user_answer,
-        expected_components_json=expected_components_json,
-        ideal_answer=ideal_answer,
-    )
-    completeness_score = comp["completeness_score"]
+        # ── Completeness score ─────────────────────────────────────────────────
+        comp = compute_completeness_score(
+            user_answer=user_answer,
+            expected_components_json=expected_components_json,
+            ideal_answer=ideal_answer,
+            question_text=question_text,
+        )
+        completeness_score = comp["completeness_score"]
 
-    # ── Weighted aggregate ────────────────────────────────────────────────────
-    answer_quality_score = round(
-        semantic_score     * WEIGHTS["semantic"]     +
-        keyword_score      * WEIGHTS["keyword"]      +
-        completeness_score * WEIGHTS["completeness"],
-        2,
-    )
+        # ── Weighted aggregate ─────────────────────────────────────────────────
+        answer_quality_score = round(
+            semantic_score     * WEIGHTS["semantic"]     +
+            keyword_score      * WEIGHTS["keyword"]      +
+            completeness_score * WEIGHTS["completeness"],
+            2,
+        )
 
-    return {
-        "answer_quality_score": answer_quality_score,
-        "quality_label":        get_quality_label(answer_quality_score),
-        "semantic_score":       semantic_score,
-        "keyword_score":        round(keyword_score, 2),
-        "completeness_score":   completeness_score,
-        "missed_keywords":      missed_keywords,
-        "components_missing":   comp["components_missing"],
-        "coaching_tips":        comp["coaching_tips"],
-    }
+        return {
+            "answer_quality_score": answer_quality_score,
+            "quality_label":        get_quality_label(answer_quality_score),
+            "semantic_score":       semantic_score,
+            "keyword_score":        round(keyword_score, 2),
+            "completeness_score":   completeness_score,
+            "missed_keywords":      missed_keywords,
+            "components_missing":   comp["components_missing"],
+            "coaching_tips":        comp["coaching_tips"],
+        }
+    except Exception as e:
+        import logging, traceback
+        logging.getLogger(__name__).error("Answer quality scoring error: %s", e)
+        traceback.print_exc()
+        # Return safe default on error
+        return {
+            "answer_quality_score": 50.0,
+            "quality_label": "Average",
+            "semantic_score": 0.0,
+            "keyword_score": 0.0,
+            "completeness_score": 0.0,
+            "missed_keywords": [],
+            "components_missing": [],
+            "coaching_tips": ["Please check your answer and try again"],
+        }

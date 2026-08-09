@@ -3,6 +3,17 @@ from typing import Optional
 
 import librosa
 
+# ─── Stop words (shared with completeness scorer) ─────────────────────────────
+_STOP_WORDS = {
+    "the","a","an","is","are","was","were","be","been","being","have","has",
+    "had","do","does","did","will","would","could","should","may","might",
+    "shall","can","to","of","in","for","on","with","at","by","from","up",
+    "about","into","this","that","these","those","i","we","you","they","he",
+    "she","it","my","our","your","their","its","and","or","but","if","when",
+    "what","how","why","which","who","where","just","also","so","than","then",
+    "very","too","some","any","all","most","more","such","no","not","only",
+}
+
 # ─── Filler word bank ─────────────────────────────────────────────────────────
 # Excludes context-dependent words like "so", "well", "like"
 FILLER_WORDS = {
@@ -38,23 +49,59 @@ def _normalize_tokens(text: str) -> list[str]:
     return re.findall(r"[a-z0-9']+", text.lower())
 
 
-def _grammar_score(text: str) -> float:
+def _meaningful_tokens(text: str) -> set[str]:
+    return {
+        t for t in re.findall(r"[a-z]+", text.lower())
+        if t not in _STOP_WORDS and len(t) > 2
+    }
+
+
+def _substance_score(tokens: list[str], question_text: str) -> float:
     """
-    Grammar quality proxy (no heavy NLP library needed):
-      1. Type-token ratio  — vocabulary diversity (higher = richer language)
-      2. Avg sentence length — 8–20 words/sentence is natural in speech
-      3. Consecutive word repetition penalty — catches stuttering
+    Measures original content depth:
+      - Ratio of meaningful tokens not shared with the question (original content)
+      - Penalises very short answers and question-repeating answers
+    Returns 0.0 – 1.0.
+    """
+    if not tokens:
+        return 0.0
+    meaningful  = {t for t in tokens if t not in _STOP_WORDS and len(t) > 2}
+    q_tokens    = _meaningful_tokens(question_text) if question_text else set()
+    original    = meaningful - q_tokens
+    if not meaningful:
+        return 0.1
+    originality = len(original) / len(meaningful)
+    # Short-answer penalty: < 12 words → cap originality benefit
+    if len(tokens) < 8:
+        return min(originality * 0.3, 0.3)
+    if len(tokens) < 15:
+        return originality * 0.6
+    return originality
+
+
+def _grammar_score(text: str, question_text: str = "") -> float:
+    """
+    Grammar / language quality proxy:
+      1. Substance score (45%) — original content depth vs question repetition
+      2. TTR (30%)             — vocabulary diversity (capped for short text)
+      3. Sentence length (25%) — 8–20 words/sentence is natural in speech
+      4. Repetition penalty    — consecutive identical words (stuttering)
     Returns 0.0 – 1.0.
     """
     tokens = _normalize_tokens(text)
     word_count = len(tokens)
     if word_count < 3:
-        return 0.2
+        return 0.1
 
-    # 1. Vocabulary diversity
+    # 1. Substance (original content vs question-repeat)
+    substance = _substance_score(tokens, question_text)
+
+    # 2. TTR — on short text a high TTR just means random words, so cap it
     ttr = len(set(tokens)) / word_count
+    if word_count < 15 and ttr > 0.85:
+        ttr = 0.55  # short random words look artificially diverse
 
-    # 2. Sentence length naturalness
+    # 3. Sentence length naturalness
     sentences = [s.strip() for s in re.split(r"[.!?]+", text) if s.strip()]
     avg_len = word_count / max(len(sentences), 1)
     if 8 <= avg_len <= 20:
@@ -64,11 +111,11 @@ def _grammar_score(text: str) -> float:
     else:
         length_score = 0.4
 
-    # 3. Stuttering penalty
+    # 4. Stuttering penalty
     repetitions = sum(1 for i in range(1, len(tokens)) if tokens[i] == tokens[i - 1])
     penalty = min(repetitions * 0.1, 0.3)
 
-    score = (ttr * 0.5) + (length_score * 0.5) - penalty
+    score = substance * 0.45 + ttr * 0.30 + length_score * 0.25 - penalty
     return round(max(0.0, min(1.0, score)), 2)
 
 
@@ -138,9 +185,15 @@ def analyze_audio(audio_path: str) -> dict:
     return {"duration_secs": duration_secs, "pause_count": pause_count}
 
 
-def compute_delivery_scores(transcript: str, duration_secs: float, pause_count: int) -> dict:
+def compute_delivery_scores(
+    transcript:    str,
+    duration_secs: float,
+    pause_count:   int,
+    question_text: str = "",
+) -> dict:
     """
     Computes all delivery scores from transcript text + pre-computed audio data.
+    question_text is used to detect question-parroting in the grammar/substance score.
     Call this after both Whisper and analyze_audio() have completed.
     """
     transcript = (transcript or "").strip()
@@ -160,7 +213,7 @@ def compute_delivery_scores(transcript: str, duration_secs: float, pause_count: 
     wpm          = round(word_count / (duration_secs / 60.0), 1) if duration_secs > 0 else 0.0
     filler_count = _count_fillers(tokens, transcript.lower())
 
-    grammar_s = _grammar_score(transcript)
+    grammar_s = _grammar_score(transcript, question_text)
     pace_s    = _pace_score(wpm)
     filler_s  = _filler_score(filler_count, word_count)
     pause_s   = _pause_score(pause_count, duration_secs)
@@ -173,6 +226,14 @@ def compute_delivery_scores(transcript: str, duration_secs: float, pause_count: 
     )
     confidence_score = round(raw * 100, 2)
     grammar_score    = round(grammar_s * 100, 2)
+
+    # Word-count gate: in a real interview, < 15 words is not a confident answer
+    # regardless of how fluently those few words were delivered.
+    if word_count < 8:
+        confidence_score = min(confidence_score, 28.0)
+    elif word_count < 15:
+        cap = 28.0 + (word_count - 8) * (22.0 / 7)  # linearly 28→50 over 8-15 words
+        confidence_score = min(confidence_score, round(cap, 2))
 
     if   confidence_score >= 85: label = "Excellent"
     elif confidence_score >= 65: label = "Good"

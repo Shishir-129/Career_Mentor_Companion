@@ -57,8 +57,15 @@ def create_response_from_audio(
     audio_path = str(saved_path)
 
     try:
+        # ✅ Check file was actually saved
+        file_size = os.path.getsize(audio_path)
+        print(f"📂 Audio file saved: {audio_path} ({file_size} bytes)")
+        if file_size == 0:
+            raise ValueError("Audio file is empty - browser recording may have failed")
+        
         # ── 2. Run Whisper (transcription) + Librosa (audio analysis) in parallel
         #       Both only need the audio file — no dependency between them
+        print("🎤 Running transcription and audio analysis in parallel...")
         with ThreadPoolExecutor(max_workers=2) as executor:
             future_transcript = executor.submit(transcribe_fn, audio_path) if transcribe_fn else None
             future_audio_data = executor.submit(analyze_audio, audio_path)
@@ -67,6 +74,7 @@ def create_response_from_audio(
             audio_data = future_audio_data.result()   # {duration_secs, pause_count}
 
     except Exception as exc:
+        print(f"❌ Audio processing failed: {type(exc).__name__}: {exc}")
         raise HTTPException(status_code=500, detail=f"Transcription failed: {exc}") from exc
     finally:
         # ── 3. Delete audio immediately — it has served its purpose ──────────
@@ -75,28 +83,69 @@ def create_response_from_audio(
         except OSError:
             pass
 
+    # ✅ Validate transcript was actually generated
+    if not transcript or len(transcript.strip()) < 3:
+        print(f"⚠️  WARNING: Transcript is empty or too short ({len(transcript) if transcript else 0} chars)")
+        print(f"    This could mean:")
+        print(f"    - Audio file was corrupted or in unsupported format")
+        print(f"    - User did not speak during recording")
+        print(f"    - Whisper failed silently")
+        
+        # Return a response with default values for empty transcript
+        db_response = Responses(
+            session_id=session_id,
+            user_id=user_id,
+            question_id=question_id,
+            question_type=question_type,
+            topic=topic,
+            transcript="[No speech detected]",
+            semantic_score=0.0,
+            keyword_score=0.0,
+            completeness_score=0.0,
+            answer_quality_score=0.0,
+            missed_keywords="",
+            confidence_score=0.0,
+            grammar_score=0.0,
+            speaking_speed=0.0,
+            pause_count=0,
+            filler_count=0.0,
+            llm_feedback="Unable to analyze audio. Please check your microphone and try again with clear speech.",
+            strengths=json.dumps([]),
+            improvements=json.dumps(["Ensure microphone is working", "Speak clearly during recording"]),
+        )
+        db.add(db_response)
+        db.commit()
+        db.refresh(db_response)
+        print(f"✅ Empty response saved with ID: {db_response.id}")
+        return db_response
+
     # ── 2. Fetch question data from DB (ideal answer, keywords, components) ──
+    print("🔍 Fetching question from database...")
     question = db.query(Questions).filter(Questions.id == question_id).first()
     ideal_answer        = (question.ideal_answer        or "") if question else ""
     keywords_str        = (question.keywords            or "") if question else ""
     expected_components = (question.expected_components or "") if question else ""
+    q_text              = (question.question_text       or "") if question else ""
+    print(f"✓ Question fetched")
 
-    # ── 3. Confidence / delivery scoring ─────────────────────────────────────
+    # ── 3. Confidence / delivery scoring ─────────────────────────────────────────
     conf = compute_delivery_scores(
         transcript=transcript,
         duration_secs=audio_data["duration_secs"],
         pause_count=audio_data["pause_count"],
+        question_text=q_text,
     )
 
-    # ── 4. Answer quality scoring (transcript vs ideal answer) ───────────────
+    # ── 4. Answer quality scoring (transcript vs ideal answer) ────────────────────
     quality = compute_answer_quality_score(
         user_answer=transcript,
         ideal_answer=ideal_answer,
         keywords_str=keywords_str,
         expected_components_json=expected_components,
+        question_text=q_text,
     )
 
-    # ── 5. Generate narrative feedback (FLAN-T5) ─────────────────────────────
+    # ── 5. Generate feedback ──────────────────────────────────────────────────
     feedback = generate_feedback(
         answer_quality_score=quality["answer_quality_score"],
         quality_label=quality["quality_label"],
@@ -111,9 +160,10 @@ def create_response_from_audio(
         speaking_speed=conf["speaking_speed"],
         filler_count=conf["filler_count"],
         pause_count=conf["pause_count"],
+        transcript=transcript,
     )
 
-    # ── 6. Build and save the response row directly (no schema gymnastics) ───
+    # ── 6. Save response to database ─────────────────────────────────────────
     db_response = Responses(
         session_id=session_id,
         user_id=user_id,

@@ -4,428 +4,203 @@ import { useNavigate } from "react-router-dom";
 import Sidebar from "../components/Sidebar";
 import axios from "axios";
 import {
-    LineChart,
-    Line,
-    ResponsiveContainer,
-    XAxis,
-    YAxis,
-    CartesianGrid,
-    Tooltip,
-    Legend,
-    Radar,
-    RadarChart,
-    PolarGrid,
-    PolarAngleAxis,
-    PolarRadiusAxis,
+    LineChart, Line, ResponsiveContainer,
+    XAxis, YAxis, CartesianGrid, Tooltip, Legend,
 } from "recharts";
-import { FiTrendingUp, FiBarChart2, FiAward, FiZap } from "react-icons/fi";
+import { FiTrendingUp } from "react-icons/fi";
 import "./Dashboard.css";
-import { CURRENT_USER } from "../config/user";
-
-const BASE_URL = "http://127.0.0.1:8000";
+import { BASE_URL, getAuth, getUserId } from "../api/config";
 
 export default function Dashboard() {
     const navigate = useNavigate();
+    const auth = getAuth();
+    const userId = getUserId();
     const [sessions, setSessions] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [filter, setFilter] = useState("all");
 
-    const userId = 1;
-
-    useEffect(() => {
-        fetchSessions();
-    }, []);
+    useEffect(() => { fetchSessions(); }, []);
 
     const fetchSessions = async () => {
         try {
             setLoading(true);
-            const res = await axios.get(
-                `${BASE_URL}/sessions/user/${userId}/history`
-            );
+            const res = await axios.get(`${BASE_URL}/sessions/user/${userId}/history`);
             setSessions(res.data);
             setError(null);
         } catch (err) {
-            console.error("Error fetching sessions:", err);
+            console.error(err);
             setError("Failed to load dashboard data");
         } finally {
             setLoading(false);
         }
     };
 
-    const getFilteredSessions = () => {
-        if (filter === "completed") {
-            return sessions.filter(s => s.completed);
-        } else if (filter === "abandoned") {
-            return sessions.filter(s => !s.completed);
-        }
-        return sessions;
+    const completed = sessions.filter(s => s.completed);
+    const abandoned = sessions.filter(s => !s.completed);
+
+    const avg = (arr) => arr.length ? Math.round(arr.reduce((a, b) => a + b, 0) / arr.length) : 0;
+
+    const stats = {
+        completedCount: completed.length,
+        abandonedCount: abandoned.length,
+        avgScore: avg(completed.map(s => s.overall_score || 0)),
+        bestScore: completed.length ? Math.round(Math.max(...completed.map(s => s.overall_score || 0))) : 0,
+        avgAnswerQuality: avg(completed.map(s => s.scores?.answer_quality_avg || 0)),
+        avgConfidence: avg(completed.map(s => s.scores?.confidence_avg || 0)),
     };
 
-    const calculateStats = () => {
-        const completedSessions = sessions.filter(s => s.completed);
-        const completedCount = completedSessions.length;
-        const abandonedCount = sessions.length - completedCount;
+    const trendData = completed.slice(0, 8).reverse().map((s, i) => ({
+        session: `#${i + 1}`,
+        quality: Math.round(s.scores?.answer_quality_avg || 0),
+        confidence: Math.round(s.scores?.confidence_avg || 0),
+    }));
 
-        if (completedCount === 0) {
-            return {
-                completedCount: 0,
-                abandonedCount,
-                averageScore: 0,
-                bestScore: 0,
-                averageConfidence: 0,
-                averageKeyword: 0,
-                averageCompleteness: 0,
-                averageGrammar: 0,
-                questionsAnswered: 0,
-                averageResponseTime: 0,
-            };
-        }
+    const filteredSessions =
+        filter === "completed" ? completed :
+        filter === "abandoned" ? abandoned :
+        sessions;
 
-        const scores = completedSessions.map(s => s.overall_score || 0);
-        const confidenceScores = completedSessions.map(s => s.scores?.confidence_avg || 0);
-        const keywordScores = completedSessions.map(s => s.scores?.keyword_avg || 0);
-        const completenessScores = completedSessions.map(s => s.scores?.completeness_avg || 0);
-        const grammarScores = completedSessions.map(s => s.scores?.grammatical_avg || 0);
+    const firstName = auth?.fullname?.split(" ")[0] || "there";
 
-        return {
-            completedCount,
-            abandonedCount,
-            averageScore: Math.round((scores.reduce((a, b) => a + b, 0) / scores.length) * 100) / 100,
-            bestScore: Math.round(Math.max(...scores) * 100) / 100,
-            averageConfidence: Math.round((confidenceScores.reduce((a, b) => a + b, 0) / confidenceScores.length) * 100) / 100,
-            averageKeyword: Math.round((keywordScores.reduce((a, b) => a + b, 0) / keywordScores.length) * 100) / 100,
-            averageCompleteness: Math.round((completenessScores.reduce((a, b) => a + b, 0) / completenessScores.length) * 100) / 100,
-            averageGrammar: Math.round((grammarScores.reduce((a, b) => a + b, 0) / grammarScores.length) * 100) / 100,
-            questionsAnswered: completedCount * 5,
-            averageResponseTime: 88,
-        };
-    };
-
-    const getPerformanceTrendData = () => {
-        return sessions
-            .filter(s => s.completed)
-            .slice(0, 10)
-            .map((session, idx) => ({
-                date: `Session ${idx + 1}`,
-                overall: session.overall_score || 0,
-                confidence: session.scores?.confidence_avg || 0,
-            }));
-    };
-
-    const getSkillsRadarData = () => {
-        const stats = calculateStats();
-        return [
-            { skill: "Technical", value: Math.round(stats.averageScore) },
-            { skill: "Fluency", value: Math.round(stats.averageGrammar) },
-            { skill: "Communication", value: Math.round(stats.averageKeyword) },
-            { skill: "Confidence", value: Math.round(stats.averageConfidence) },
-            { skill: "Problem Solving", value: Math.round(stats.averageScore * 0.9) },
-            { skill: "Vocabulary", value: Math.round(stats.averageCompleteness) },
-        ];
-    };
-
-    const stats = calculateStats();
-    const performanceTrendData = getPerformanceTrendData();
-    const skillsRadarData = getSkillsRadarData();
-    const filteredSessions = getFilteredSessions();
-
-    if (loading) {
-        return (
-            <div className="app-layout">
-                <Sidebar />
-                <div className="dashboard-wrapper dashboard-center">
-                    <p className="loading-text">⏳ Loading dashboard...</p>
-                </div>
-            </div>
-        );
-    }
+    if (loading) return (
+        <div className="app-layout">
+            <Sidebar />
+            <div className="dash-wrapper dash-center"><p className="loading-text">⏳ Loading dashboard…</p></div>
+        </div>
+    );
 
     return (
         <div className="app-layout">
             <Sidebar />
-            <div className="dashboard-wrapper">
-                {/* ── Greeting Section ── */}
-                <div className="greeting-section">
-                    <div className="greeting-content">
-                        <h1 className="greeting-title">Good morning, {CURRENT_USER.name.split(" ")[0]}</h1>
-                        <p className="greeting-subtitle">
-                            Ready to improve your interview skills?
+            <div className="dash-wrapper">
+
+                {/* Header */}
+                <div className="dash-header">
+                    <div>
+                        <h1 className="dash-greeting">Welcome back, {firstName}</h1>
+                        <p className="dash-sub">
+                            {stats.completedCount === 0
+                                ? "Start your first interview to see your progress here."
+                                : `${stats.completedCount} completed session${stats.completedCount !== 1 ? "s" : ""} • ${sessions.length} total`}
                         </p>
                     </div>
-                    <button
-                        className="btn-large"
-                        onClick={() => navigate("/new-interview")}
-                    >
-                        + Start Interview
+                    <button className="btn-primary" onClick={() => navigate("/new-interview")}>
+                        + New Interview
                     </button>
                 </div>
 
-                {/* ── Summary Stats ── */}
-                <div className="summary-section">
-                    <div className="summary-card">
-                        <div className="summary-icon">📊</div>
-                        <div className="summary-content">
-                            <p className="summary-label">Overall Score</p>
-                            <p className="summary-value">{stats.averageScore}</p>
-                        </div>
-                    </div>
-                    <div className="summary-card">
-                        <div className="summary-icon">🎤</div>
-                        <div className="summary-content">
-                            <p className="summary-label">Confidence Score</p>
-                            <p className="summary-value">{stats.averageConfidence}</p>
-                        </div>
-                    </div>
-                    <div className="summary-card">
-                        <div className="summary-icon">🔑</div>
-                        <div className="summary-content">
-                            <p className="summary-label">Keyword Match</p>
-                            <p className="summary-value">{stats.averageKeyword}</p>
-                        </div>
-                    </div>
-                    <div className="summary-card">
-                        <div className="summary-icon">✅</div>
-                        <div className="summary-content">
-                            <p className="summary-label">Completeness</p>
-                            <p className="summary-value">{stats.averageCompleteness}</p>
-                        </div>
-                    </div>
-                    <div className="summary-card">
-                        <div className="summary-icon">❓</div>
-                        <div className="summary-content">
-                            <p className="summary-label">Questions Done</p>
-                            <p className="summary-value">{stats.questionsAnswered}</p>
-                        </div>
-                    </div>
-                    <div className="summary-card">
-                        <div className="summary-icon">⏱️</div>
-                        <div className="summary-content">
-                            <p className="summary-label">Avg Response</p>
-                            <p className="summary-value">{stats.averageResponseTime}s</p>
-                        </div>
-                    </div>
+                {/* Stats */}
+                <div className="dash-stats">
+                    <StatCard label="Completed" value={stats.completedCount} />
+                    <StatCard label="Avg Score" value={stats.avgScore} suffix="/100" />
+                    <StatCard label="Best Score" value={stats.bestScore} suffix="/100" highlight />
+                    <StatCard label="Avg Answer Quality" value={stats.avgAnswerQuality} suffix="/100" />
+                    <StatCard label="Avg Confidence" value={stats.avgConfidence} suffix="/100" />
                 </div>
 
-                {/* ── Charts Section ── */}
-                <div className="charts-section">
-                    {/* Performance Trend */}
-                    <div className="chart-card">
-                        <div className="chart-header">
-                            <h3 className="chart-title">
-                                <FiTrendingUp /> Performance Trend
-                            </h3>
-                            <span className="chart-subtitle">Last 6 sessions</span>
+                {/* Trend chart */}
+                {trendData.length >= 2 && (
+                    <div className="dash-card">
+                        <div className="dash-card-header">
+                            <h3><FiTrendingUp /> Performance Trend</h3>
+                            <span className="dash-card-sub">last {trendData.length} sessions</span>
                         </div>
-                        {performanceTrendData.length > 0 ? (
-                            <ResponsiveContainer width="100%" height={300}>
-                                <LineChart data={performanceTrendData}>
-                                    <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                                    <XAxis dataKey="date" stroke="#999" />
-                                    <YAxis stroke="#999" />
-                                    <Tooltip
-                                        contentStyle={{
-                                            backgroundColor: "#fff",
-                                            border: "1px solid #e5e7eb",
-                                            borderRadius: "0.5rem",
-                                        }}
-                                    />
-                                    <Legend />
-                                    <Line
-                                        type="monotone"
-                                        dataKey="overall"
-                                        stroke="#2563eb"
-                                        strokeWidth={2}
-                                        dot={{ fill: "#2563eb", r: 4 }}
-                                        activeDot={{ r: 6 }}
-                                        name="Overall"
-                                    />
-                                    <Line
-                                        type="monotone"
-                                        dataKey="confidence"
-                                        stroke="#8b5cf6"
-                                        strokeWidth={2}
-                                        dot={{ fill: "#8b5cf6", r: 4 }}
-                                        activeDot={{ r: 6 }}
-                                        name="Confidence"
-                                    />
-                                </LineChart>
-                            </ResponsiveContainer>
-                        ) : (
-                            <p className="chart-empty">No data yet</p>
-                        )}
+                        <ResponsiveContainer width="100%" height={240}>
+                            <LineChart data={trendData}>
+                                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                                <XAxis dataKey="session" stroke="#bbb" tick={{ fontSize: 12 }} />
+                                <YAxis domain={[0, 100]} stroke="#bbb" tick={{ fontSize: 12 }} />
+                                <Tooltip contentStyle={{ borderRadius: "8px", border: "1px solid #e5e7eb", fontSize: "13px" }} />
+                                <Legend wrapperStyle={{ fontSize: "13px" }} />
+                                <Line type="monotone" dataKey="quality" stroke="#2563eb" strokeWidth={2} dot={{ r: 3 }} name="Answer Quality" />
+                                <Line type="monotone" dataKey="confidence" stroke="#7c3aed" strokeWidth={2} dot={{ r: 3 }} name="Confidence" />
+                            </LineChart>
+                        </ResponsiveContainer>
                     </div>
+                )}
 
-                    {/* Skills Radar */}
-                    <div className="chart-card">
-                        <div className="chart-header">
-                            <h3 className="chart-title">
-                                <FiBarChart2 /> Skills Radar
-                            </h3>
-                        </div>
-                        {skillsRadarData.length > 0 ? (
-                            <ResponsiveContainer width="100%" height={300}>
-                                <RadarChart data={skillsRadarData}>
-                                    <PolarGrid stroke="#e5e7eb" />
-                                    <PolarAngleAxis dataKey="skill" stroke="#999" />
-                                    <PolarRadiusAxis stroke="#999" />
-                                    <Radar
-                                        name="Skill Score"
-                                        dataKey="value"
-                                        stroke="#2563eb"
-                                        fill="#2563eb"
-                                        fillOpacity={0.6}
-                                    />
-                                    <Tooltip
-                                        contentStyle={{
-                                            backgroundColor: "#fff",
-                                            border: "1px solid #e5e7eb",
-                                            borderRadius: "0.5rem",
-                                        }}
-                                    />
-                                </RadarChart>
-                            </ResponsiveContainer>
-                        ) : (
-                            <p className="chart-empty">No data yet</p>
-                        )}
-                    </div>
-                </div>
-
-                {/* ── History Section ── */}
-                <div className="history-section">
-                    <div className="history-header">
+                {/* Recent Sessions */}
+                <div className="dash-card">
+                    <div className="dash-card-header">
                         <div>
-                            <h3 className="history-title">Recent Sessions</h3>
-                            <p className="history-count">
-                                {sessions.length} total sessions
-                            </p>
+                            <h3>Recent Sessions</h3>
+                            <p className="dash-card-sub">{sessions.length} total sessions</p>
+                        </div>
+                        <div className="dash-filters">
+                            {[["all", sessions.length], ["completed", stats.completedCount], ["abandoned", stats.abandonedCount]].map(([key, count]) => (
+                                <button key={key} className={`filter-btn ${filter === key ? "active" : ""}`} onClick={() => setFilter(key)}>
+                                    {key.charAt(0).toUpperCase() + key.slice(1)} ({count})
+                                </button>
+                            ))}
                         </div>
                     </div>
 
-                    <div className="dashboard-filters">
-                        <button
-                            className={`filter-btn ${filter === "all" ? "active" : ""}`}
-                            onClick={() => setFilter("all")}
-                        >
-                            All ({sessions.length})
-                        </button>
-                        <button
-                            className={`filter-btn ${filter === "completed" ? "active" : ""}`}
-                            onClick={() => setFilter("completed")}
-                        >
-                            ✅ Completed ({stats.completedCount})
-                        </button>
-                        <button
-                            className={`filter-btn ${filter === "abandoned" ? "active" : ""}`}
-                            onClick={() => setFilter("abandoned")}
-                        >
-                            ⏸ Abandoned ({stats.abandonedCount})
-                        </button>
-                    </div>
+                    {error && <p style={{ color: "#ef4444", padding: "1rem 0" }}>{error}</p>}
 
                     {filteredSessions.length === 0 ? (
-                        <div className="empty-state">
-                            <p className="empty-icon">📭</p>
-                            <p className="empty-text">
+                        <div className="dash-empty">
+                            <p>
                                 {filter === "all"
-                                    ? "No interviews yet. Start your first interview!"
+                                    ? "No interviews yet."
                                     : `No ${filter} interviews.`}
                             </p>
-                            <button
-                                className="btn-secondary"
-                                onClick={() => navigate("/new-interview")}
-                            >
+                            <button className="btn-secondary" onClick={() => navigate("/new-interview")}>
                                 Start Interview
                             </button>
                         </div>
                     ) : (
-                        <div className="sessions-list">
-                            {filteredSessions.map((session) => (
-                                <SessionListItem
-                                    key={session.session_id}
-                                    session={session}
-                                />
-                            ))}
+                        <div className="session-list">
+                            {filteredSessions.map(s => <SessionRow key={s.session_id} session={s} />)}
                         </div>
                     )}
                 </div>
+
             </div>
         </div>
     );
 }
 
-function SessionListItem({ session }) {
-    const scoreColor =
-        session.overall_score >= 70
-            ? "#4ade80"
-            : session.overall_score >= 40
-            ? "#facc15"
-            : "#f87171";
+function StatCard({ label, value, suffix = "", highlight = false }) {
+    return (
+        <div className={`stat-card ${highlight ? "highlight" : ""}`}>
+            <p className="stat-label">{label}</p>
+            <p className="stat-value">{value}<span className="stat-suffix">{suffix}</span></p>
+        </div>
+    );
+}
 
-    const scorePct = Math.round(session.overall_score * 100) / 100;
+function SessionRow({ session }) {
+    const score = Math.round(session.overall_score || 0);
+    const color = score >= 70 ? "#22c55e" : score >= 45 ? "#f59e0b" : "#ef4444";
 
-    const formatDate = (dateString) => {
-        const date = new Date(dateString);
-        return date.toLocaleDateString("en-US", {
-            year: "numeric",
-            month: "short",
-            day: "numeric",
-        });
-    };
+    const date = new Date(session.started_at).toLocaleDateString("en-US", {
+        month: "short", day: "numeric", year: "numeric",
+    });
 
     return (
-        <div className="session-list-item">
-            <div className="session-score-circle" style={{ color: scoreColor }}>
-                <div className="session-score-value">{scorePct}</div>
+        <div className="session-row">
+            <div className="session-score" style={{ color }}>{score}</div>
+            <div className="session-info">
+                <span className="session-role">{session.role}</span>
+                <span className="session-date">{date} • {session.responses_count} Q answered</span>
             </div>
+            <div className="session-scores">
+                <ScoreChip label="Answer Quality" value={Math.round(session.scores?.answer_quality_avg || 0)} />
+                <ScoreChip label="Confidence" value={Math.round(session.scores?.confidence_avg || 0)} />
+            </div>
+            <span className={`status-badge ${session.completed ? "completed" : "abandoned"}`}>
+                {session.completed ? "Completed" : "Abandoned"}
+            </span>
+        </div>
+    );
+}
 
-            <div className="session-list-info">
-                <h3 className="session-list-role">{session.role}</h3>
-                <div className="session-list-meta">
-                    <span>{session.scores?.semantic_avg?.toFixed(0) || 0}%</span>
-                    <span>•</span>
-                    <span>{session.scores?.keyword_avg?.toFixed(0) || 0}%</span>
-                    <span>•</span>
-                    <span>{formatDate(session.started_at)}</span>
-                </div>
-            </div>
-
-            <div className="session-list-scores">
-                <div className="score-item">
-                    <span className="score-value">
-                        {Math.round(session.scores?.answer_quality_avg || 0)}
-                    </span>
-                    <span className="score-label">COMP</span>
-                </div>
-                <div className="score-item">
-                    <span className="score-value">
-                        {Math.round(session.scores?.semantic_avg || 0)}
-                    </span>
-                    <span className="score-label">KEYS</span>
-                </div>
-                <div className="score-item">
-                    <span className="score-value">
-                        {Math.round(session.scores?.keyword_avg || 0)}
-                    </span>
-                    <span className="score-label">COMP</span>
-                </div>
-                <div className="score-item">
-                    <span className="score-value">5/10</span>
-                    <span className="score-label">Q</span>
-                </div>
-                <div className="score-item">
-                    <span className="score-value">88s</span>
-                    <span className="score-label">TIME</span>
-                </div>
-            </div>
-
-            <div className="session-status">
-                {session.completed ? (
-                    <span className="status-badge completed">✅ Completed</span>
-                ) : (
-                    <span className="status-badge abandoned">⏸ Abandoned</span>
-                )}
-            </div>
+function ScoreChip({ label, value }) {
+    return (
+        <div className="score-chip">
+            <span className="chip-value">{value}</span>
+            <span className="chip-label">{label}</span>
         </div>
     );
 }

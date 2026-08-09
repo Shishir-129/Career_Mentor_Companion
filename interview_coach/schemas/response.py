@@ -1,7 +1,8 @@
-from pydantic import BaseModel, ConfigDict
+from __future__ import annotations
+from pydantic import BaseModel, ConfigDict, field_validator
 from typing import Optional
 from datetime import datetime
-
+import json
 
 class ResponseCreate(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -45,13 +46,24 @@ class ResponseResponse(BaseModel):
     confidence_score: Optional[float]
     missed_keywords: Optional[str]
     llm_feedback: Optional[str]
-    strengths: Optional[str]
-    improvements: Optional[str]
+    strengths: Optional[list[str]] = None
+    improvements: Optional[list[str]] = None
     speaking_speed: Optional[float]
     pause_count: Optional[int]
     filler_count: Optional[int]
     audio_file_path: Optional[str]
     created_at: datetime
+
+    @field_validator("strengths", "improvements", mode="before")
+    @classmethod
+    def parse_json_list(cls, v):
+        if isinstance(v, str):
+            try:
+                parsed = json.loads(v)
+                return parsed if isinstance(parsed, list) else [v]
+            except (json.JSONDecodeError, ValueError):
+                return [v]
+        return v
 
 
 class ResponseScoreUpdate(BaseModel):

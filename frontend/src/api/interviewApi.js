@@ -1,9 +1,20 @@
-// frontend/src/api/interviewApi.js
 import axios from "axios";
+import { BASE_URL } from "./config";
 
-const BASE_URL = "http://127.0.0.1:8000";
+// ── Auth ──────────────────────────────────────────────────────────────────────
+export const loginUser = async (email, password) => {
+    const res = await axios.post(`${BASE_URL}/users/login`, { email, password });
+    return res.data;
+};
 
-// POST /sessions/ — create a new interview session
+export const registerUser = async (fullname, email, password, target_role) => {
+    const res = await axios.post(`${BASE_URL}/users/register`, {
+        fullname, email, password, target_role,
+    });
+    return res.data;
+};
+
+// ── Sessions ──────────────────────────────────────────────────────────────────
 export const createSession = async (userId, role) => {
     const res = await axios.post(`${BASE_URL}/sessions/`, {
         user_id: userId,
@@ -12,13 +23,14 @@ export const createSession = async (userId, role) => {
     return res.data;
 };
 
-// POST /questions/for-session — fetch questions matching role + level
-export const getQuestionsForSession = async (role, level, interviewType, count = 5) => {
+// POST /questions/for-session — fetch questions matching role + level + difficulty
+export const getQuestionsForSession = async (role, level, interviewType, difficulty, count = 5) => {
     const res = await axios.post(`${BASE_URL}/questions/for-session`, {
-        role: role,
-        level: level,
+        role,
+        level,
         interview_type: interviewType,
-        count: count,
+        difficulty,
+        count,
     });
     return res.data;
 };
@@ -32,15 +44,20 @@ export const submitAudioResponse = async ({ sessionId, userId, questionId, quest
     if (questionType) formData.append("question_type", questionType);
     if (topic) formData.append("topic", topic);
 
+    // ✅ Determine file extension based on actual blob MIME type
     const mimeType = audioBlob.type || "audio/webm";
-    const ext = mimeType.includes("wav") ? "wav"
-              : mimeType.includes("ogg") ? "ogg"
-              : mimeType.includes("mp4") ? "mp4"
-              : "webm";
-    formData.append("audio_file", audioBlob, `answer.${ext}`);
+    let ext = "wav"; // default
+    if (mimeType.includes("mp4") || mimeType.includes("mpeg")) ext = "mp4";
+    else if (mimeType.includes("ogg")) ext = "ogg";
+    else if (mimeType.includes("webm")) ext = "webm";
+    
+    const filename = `answer.${ext}`;
+    console.log(`📨 Uploading audio as ${filename} (type: ${mimeType}, size: ${audioBlob.size} bytes)`);
+    formData.append("audio_file", audioBlob, filename);
 
     const res = await axios.post(`${BASE_URL}/responses/upload-audio`, formData, {
-        headers: { "Content-Type": "multipart/form-data" },
+        timeout: 180000,  // 180 seconds (3 minutes) - scoring + FLAN-T5 can take time
+        // ✅ DO NOT set Content-Type — axios auto-detects FormData and sets boundary
     });
     return res.data;
 };

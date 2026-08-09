@@ -1,14 +1,38 @@
-# Virtual environment
+# Virtual environments
 venv/
+venv_py312/
+env/
+.venv
 
 # Python cache
 __pycache__/
 *.pyc
+*.pyo
+*.egg-info/
 
 # Environment variables
 .env
+.env.local
 
-# VS Code settings (optional)
+# IDE/Editor
 .vscode/
+.idea/
+*.swp
 
-node_modules 
+# Logs
+*.log
+logs/
+
+# Uploads & temp
+uploads/
+*.wav
+*.mp3
+*.webm
+
+# Database
+*.db
+*.sqlite 
+
+~$_Interview_QnA_Bank.docx
+DS_Interview_QnA_Bank_161455.docx
+DS_Interview_QnA_Bank.docx

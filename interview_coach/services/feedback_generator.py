@@ -1,61 +1,16 @@
 from __future__ import annotations
-from transformers import pipeline
-
-# ─── Model config ──────────────────────────────────────────────────────────────
-# flan-t5-base : ~250MB, 2–5s on CPU  ← default (practical for local deployment)
-# flan-t5-large: ~780MB, 15–25s on CPU ← swap here for richer prose
-_MODEL_NAME = "google/flan-t5-base"
-
-# Lazy-loaded — model is NOT loaded at import time to avoid slowing app startup.
-# It loads on the first feedback request and stays in memory after that.
-_generator = None
-
-
-def _get_generator():
-    global _generator
-    if _generator is None:
-        _generator = pipeline(
-            "text2text-generation",
-            model=_MODEL_NAME,
-            device=-1,          # CPU; change to 0 if GPU is available
-        )
-    return _generator
-
-
-# ─── Final score weights ───────────────────────────────────────────────────────
-# Content quality matters more than delivery in a technical interview
-_FINAL_WEIGHTS = {"answer_quality": 0.70, "confidence": 0.30}
 
 
 def _get_label(score: float) -> str:
-    if score >= 85: return "Excellent"
-    if score >= 65: return "Good"
-    if score >= 45: return "Average"
+    if score >= 85:
+        return "Excellent"
+    if score >= 65:
+        return "Good"
+    if score >= 45:
+        return "Average"
     return "Poor"
 
 
-# ─── Prompt builder ────────────────────────────────────────────────────────────
-def _build_prompt(d: dict) -> str:
-    missed = ", ".join(d["missed_keywords"]) or "none"
-    missing = ", ".join(d["components_missing"]) or "none"
-
-    return (
-        f"You are an expert interview coach. Write 2-3 sentences of personalized, "
-        f"encouraging and actionable feedback for a candidate based on their performance.\n\n"
-        f"Overall score: {d['final_score']:.0f}/100 ({d['final_label']}). "
-        f"Answer quality: {d['answer_quality_score']:.0f}/100 "
-        f"(semantic {d['semantic_score']:.0f}, keywords {d['keyword_score']:.0f}, "
-        f"completeness {d['completeness_score']:.0f}). "
-        f"Delivery: {d['confidence_score']:.0f}/100 "
-        f"(grammar {d['grammar_score']:.0f}, pace {d['speaking_speed']:.0f} WPM, "
-        f"{d['filler_count']} filler words, {d['pause_count']} long pauses). "
-        f"Technical terms missed: {missed}. "
-        f"Answer components missing: {missing}.\n\n"
-        f"Feedback:"
-    )
-
-
-# ─── Strengths derived from scores ────────────────────────────────────────────
 def _derive_strengths(d: dict) -> list[str]:
     strengths = []
     if d["semantic_score"] >= 65:
@@ -66,28 +21,84 @@ def _derive_strengths(d: dict) -> list[str]:
         strengths.append("Answer covered the key structural components.")
     if d["grammar_score"] >= 65:
         strengths.append("Clear and articulate language.")
-    if d["filler_count"] == 0:
-        strengths.append("Confident delivery — no filler words detected.")
+    if d["filler_count"] <= 1:
+        strengths.append("Confident delivery with minimal filler words.")
     if 120 <= d["speaking_speed"] <= 155:
-        strengths.append("Excellent speaking pace (120–155 WPM).")
-    return strengths or ["Keep practising — improvement takes consistent effort."]
+        strengths.append("Excellent speaking pace (120-155 WPM).")
+    return strengths or ["Keep practising to build confidence and depth."]
 
 
-# ─── Improvements list (coaching tips + gaps) ──────────────────────────────────
 def _derive_improvements(d: dict) -> list[str]:
+    # coaching_tips are already the human-readable form of components_missing
+    # (e.g. "Try opening with a clear definition.") — don't add components_missing
+    # separately as it would repeat the same information in a different format.
     improvements = list(d["coaching_tips"])
     if d["missed_keywords"]:
-        improvements.append(
-            f"Use these technical terms in your answer: {', '.join(d['missed_keywords'])}."
-        )
-    if d["components_missing"]:
-        improvements.append(
-            f"Strengthen your answer by adding: {', '.join(d['components_missing'])}."
-        )
+        kws = ", ".join(d["missed_keywords"])
+        improvements.append(f"Include these technical terms in your answer: {kws}.")
     return improvements
 
 
-# ─── Main entry point ─────────────────────────────────────────────────────────
+def _build_narrative(
+    answer_quality_score: float,
+    confidence_score: float,
+    semantic_score: float,
+    keyword_score: float,
+    completeness_score: float,
+    strengths: list[str],
+    improvements: list[str],
+    word_count: int = 0,
+) -> str:
+    # ── Opening: overall answer quality ──────────────────────────────────────
+    if answer_quality_score >= 80:
+        opening = "Strong answer — you demonstrated a solid, well-rounded understanding of the topic."
+    elif answer_quality_score >= 65:
+        opening = "Good response overall. You covered the core concept effectively."
+    elif answer_quality_score >= 45:
+        opening = "Your answer shows a basic understanding, but needs more depth and structure to stand out."
+    else:
+        opening = "This answer needs significant work. Focus on explaining concepts clearly with supporting examples."
+
+    # Flag if the answer was too brief
+    if 0 < word_count < 25:
+        opening += " Your answer was quite brief — interviewers generally expect more elaboration."
+
+    # ── Middle: diagnostic observation specific to the score profile ──────────
+    if semantic_score >= 75 and keyword_score >= 65:
+        middle = "You showed both conceptual clarity and good use of technical terms."
+    elif semantic_score >= 65 and keyword_score < 50:
+        middle = "You understood the concept well, but missed several key technical terms that interviewers specifically listen for."
+    elif semantic_score < 50 and keyword_score >= 65:
+        middle = "You used the right terminology, but the core explanation drifted from what was being asked."
+    elif completeness_score < 50:
+        middle = "The answer touched on the topic but was missing important structural elements — a definition or a concrete example would strengthen it considerably."
+    elif strengths:
+        middle = strengths[0]
+    else:
+        middle = ""
+
+    # ── Improvement: most actionable next step ────────────────────────────────
+    if improvements:
+        improve = f"To improve: {improvements[0].rstrip('.')}."
+    else:
+        improve = "Keep practising — consistency is the fastest path to improvement."
+
+    # ── Closing: delivery ─────────────────────────────────────────────────────
+    if confidence_score >= 75:
+        closing = "Your delivery was confident and clear — that composure will serve you well in real interviews."
+    elif confidence_score >= 55:
+        closing = "Decent delivery. Work on reducing filler words to come across more polished."
+    else:
+        closing = "Focus on your delivery: aim for a steady 120-155 WPM pace and cut filler words like 'um' and 'uh'."
+
+    parts = [opening]
+    if middle:
+        parts.append(middle)
+    parts.append(improve)
+    parts.append(closing)
+    return " ".join(parts)
+
+
 def generate_feedback(
     answer_quality_score: float,
     quality_label: str,
@@ -102,74 +113,41 @@ def generate_feedback(
     speaking_speed: float,
     filler_count: int,
     pause_count: int,
+    transcript: str = "",
 ) -> dict:
-    """
-    Combines all scoring outputs into a single structured feedback response.
-
-    Final Score = answer_quality × 0.70  +  confidence × 0.30
-    Narrative   = generated by FLAN-T5-base (lazy-loaded local model)
-    """
-    # ── Overall final score ───────────────────────────────────────────────────
-    final_score = round(
-        answer_quality_score * _FINAL_WEIGHTS["answer_quality"] +
-        confidence_score     * _FINAL_WEIGHTS["confidence"],
-        2,
-    )
-    final_label = _get_label(final_score)
-
-    d = {
-        "final_score":          final_score,
-        "final_label":          final_label,
-        "answer_quality_score": answer_quality_score,
-        "semantic_score":       semantic_score,
-        "keyword_score":        keyword_score,
-        "completeness_score":   completeness_score,
-        "confidence_score":     confidence_score,
-        "grammar_score":        grammar_score,
-        "speaking_speed":       speaking_speed,
-        "filler_count":         filler_count,
-        "pause_count":          pause_count,
-        "missed_keywords":      missed_keywords,
-        "components_missing":   components_missing,
-        "coaching_tips":        coaching_tips,
-    }
-
-    # ── FLAN-T5 narrative (lazy-loaded on first call) ─────────────────────────
-    try:
-        prompt = _build_prompt(d)
-        gen    = _get_generator()
-        output = gen(
-            prompt,
-            max_new_tokens=150,
-            num_beams=4,            # beam search → better quality than greedy
-            early_stopping=True,
-            no_repeat_ngram_size=3, # prevents repetitive phrases
-        )
-        narrative = output[0]["generated_text"].strip()
-    except Exception as e:
-        narrative = f"Feedback generation unavailable: {e}"
-
-    # ── Structured sections ───────────────────────────────────────────────────
-    return {
-        # Summary
-        "final_score":          final_score,
-        "final_label":          final_label,
-
-        # Score breakdown (for dashboard charts)
-        "answer_quality_score": answer_quality_score,
-        "confidence_score":     confidence_score,
-        "score_breakdown": {
-            "semantic_score":     semantic_score,
-            "keyword_score":      keyword_score,
+    strengths = _derive_strengths(
+        {
+            "semantic_score": semantic_score,
+            "keyword_score": keyword_score,
             "completeness_score": completeness_score,
-            "grammar_score":      grammar_score,
-            "speaking_speed":     speaking_speed,
-            "filler_count":       filler_count,
-            "pause_count":        pause_count,
-        },
+            "grammar_score": grammar_score,
+            "filler_count": filler_count,
+            "speaking_speed": speaking_speed,
+        }
+    )
+    improvements = _derive_improvements(
+        {
+            "coaching_tips":   coaching_tips,
+            "missed_keywords": missed_keywords,
+        }
+    )
 
-        # Qualitative feedback (for dashboard display)
+    word_count = len(transcript.split()) if transcript.strip() else 0
+
+    narrative = _build_narrative(
+        answer_quality_score=answer_quality_score,
+        confidence_score=confidence_score,
+        semantic_score=semantic_score,
+        keyword_score=keyword_score,
+        completeness_score=completeness_score,
+        strengths=strengths,
+        word_count=word_count,
+        improvements=improvements,
+    )
+    return {
+        "answer_quality_score": answer_quality_score,
+        "confidence_score": confidence_score,
         "narrative_feedback": narrative,
-        "strengths":          _derive_strengths(d),
-        "improvements":       _derive_improvements(d),
+        "strengths": strengths,
+        "improvements": improvements,
     }
