@@ -50,76 +50,76 @@ DIFFICULTY_TO_QTYPE = {
 }
 
 TOPIC_MAP = {
-    "supervised machine learning":         ("Machine Learning", "Supervised Learning"),
-    "linear regression":                   ("Machine Learning", "Linear Regression"),
-    "validation":                          ("Machine Learning", "Model Validation"),
-    "classification":                      ("Machine Learning", "Classification"),
-    "regularization":                      ("Machine Learning", "Regularization"),
-    "feature selection":                   ("Machine Learning", "Feature Engineering"),
-    "feature engineering":                 ("Machine Learning", "Feature Engineering"),
-    "decision trees":                      ("Machine Learning", "Decision Trees"),
-    "decision tree":                       ("Machine Learning", "Decision Trees"),
-    "random forest":                       ("Machine Learning", "Ensemble Methods"),
-    "gradient boosting":                   ("Machine Learning", "Ensemble Methods"),
-    "ensemble":                            ("Machine Learning", "Ensemble Methods"),
-    "parameter tuning":                    ("Machine Learning", "Hyperparameter Tuning"),
-    "hyperparameter":                      ("Machine Learning", "Hyperparameter Tuning"),
-    "neural networks":                     ("Deep Learning", "Neural Networks"),
-    "neural network":                      ("Deep Learning", "Neural Networks"),
-    "optimization in neural networks":     ("Deep Learning", "Optimization"),
-    "optimization":                        ("Deep Learning", "Optimization"),
-    "neural networks for computer vision": ("Deep Learning", "Computer Vision"),
-    "computer vision":                     ("Deep Learning", "Computer Vision"),
-    "cnn":                                 ("Deep Learning", "Computer Vision"),
-    "convolutional":                       ("Deep Learning", "Computer Vision"),
-    "rnn":                                 ("Deep Learning", "Recurrent Networks"),
-    "lstm":                                ("Deep Learning", "Recurrent Networks"),
-    "recurrent":                           ("Deep Learning", "Recurrent Networks"),
-    "text classification":                 ("NLP", "Text Classification"),
-    "nlp":                                 ("NLP", "General NLP"),
-    "natural language":                    ("NLP", "General NLP"),
-    "word embedding":                      ("NLP", "Word Embeddings"),
-    "transformer":                         ("NLP", "Transformers"),
-    "bert":                                ("NLP", "Transformers"),
-    "clustering":                          ("Machine Learning", "Unsupervised Learning"),
-    "unsupervised":                        ("Machine Learning", "Unsupervised Learning"),
-    "dimensionality reduction":            ("Machine Learning", "Dimensionality Reduction"),
-    "pca":                                 ("Machine Learning", "Dimensionality Reduction"),
-    "ranking and search":                  ("Machine Learning", "Ranking & Search"),
-    "recommender":                         ("Machine Learning", "Recommender Systems"),
-    "time series":                         ("Machine Learning", "Time Series"),
-    "arima":                               ("Machine Learning", "Time Series"),
-    "statistics":                          ("Statistics", "General Statistics"),
-    "probability":                         ("Statistics", "Probability"),
-    "a/b testing":                         ("Statistics", "A/B Testing"),
-    "ab testing":                          ("Statistics", "A/B Testing"),
-    "hypothesis":                          ("Statistics", "Hypothesis Testing"),
-    "statistical inference":               ("Statistics", "Statistical Inference"),
-    "confidence interval":                 ("Statistics", "Statistical Inference"),
-    "p-value":                             ("Statistics", "Hypothesis Testing"),
-    "bayes":                               ("Statistics", "Bayesian Statistics"),
-    "sql":                                 ("Data Engineering", "SQL"),
-    "python":                              ("Programming", "Python"),
-    "programming":                         ("Programming", "General Programming"),
-    "data analysis":                       ("Data Analysis", "EDA"),
-    "exploratory":                         ("Data Analysis", "EDA"),
-    "predictive modeling":                 ("Machine Learning", "Predictive Modeling"),
-    "product metrics":                     ("Product Analytics", "Product Metrics"),
-    "communication":                       ("Soft Skills", "Communication"),
-    "machine learning":                    ("Machine Learning", "General ML"),
-    "deep learning":                       ("Deep Learning", "General DL"),
-    "data preprocessing":                  ("Data Engineering", "Data Preprocessing"),
-    "model evaluation":                    ("Machine Learning", "Model Evaluation"),
-    "svm":                                 ("Machine Learning", "SVM"),
-    "support vector":                      ("Machine Learning", "SVM"),
-    "logistic regression":                 ("Machine Learning", "Classification"),
-    "bias":                                ("Machine Learning", "Bias-Variance"),
-    "variance":                            ("Machine Learning", "Bias-Variance"),
-    "overfitting":                         ("Machine Learning", "Regularization"),
-    "cross-validation":                    ("Machine Learning", "Model Validation"),
-    "missing":                             ("Data Engineering", "Data Preprocessing"),
-    "outlier":                             ("Data Engineering", "Data Preprocessing"),
-    "imbalanced":                          ("Machine Learning", "Classification"),
+    "supervised machine learning":         "Machine Learning",
+    "linear regression":                   "Machine Learning",
+    "validation":                          "Machine Learning",
+    "classification":                      "Machine Learning",
+    "regularization":                      "Machine Learning",
+    "feature selection":                   "Machine Learning",
+    "feature engineering":                 "Machine Learning",
+    "decision trees":                      "Machine Learning",
+    "decision tree":                       "Machine Learning",
+    "random forest":                       "Machine Learning",
+    "gradient boosting":                   "Machine Learning",
+    "ensemble":                            "Machine Learning",
+    "parameter tuning":                    "Machine Learning",
+    "hyperparameter":                      "Machine Learning",
+    "neural networks":                     "Deep Learning",
+    "neural network":                      "Deep Learning",
+    "optimization in neural networks":     "Deep Learning",
+    "optimization":                        "Deep Learning",
+    "neural networks for computer vision": "Deep Learning",
+    "computer vision":                     "Deep Learning",
+    "cnn":                                 "Deep Learning",
+    "convolutional":                       "Deep Learning",
+    "rnn":                                 "Deep Learning",
+    "lstm":                                "Deep Learning",
+    "recurrent":                           "Deep Learning",
+    "text classification":                 "NLP",
+    "nlp":                                 "NLP",
+    "natural language":                    "NLP",
+    "word embedding":                      "NLP",
+    "transformer":                         "NLP",
+    "bert":                                "NLP",
+    "clustering":                          "Machine Learning",
+    "unsupervised":                        "Machine Learning",
+    "dimensionality reduction":            "Machine Learning",
+    "pca":                                 "Machine Learning",
+    "ranking and search":                  "Machine Learning",
+    "recommender":                         "Machine Learning",
+    "time series":                         "Machine Learning",
+    "arima":                               "Machine Learning",
+    "statistics":                          "Statistics",
+    "probability":                         "Statistics",
+    "a/b testing":                         "Statistics",
+    "ab testing":                          "Statistics",
+    "hypothesis":                          "Statistics",
+    "statistical inference":               "Statistics",
+    "confidence interval":                 "Statistics",
+    "p-value":                             "Statistics",
+    "bayes":                               "Statistics",
+    "sql":                                 "Data Engineering",
+    "python":                              "Programming",
+    "programming":                         "Programming",
+    "data analysis":                       "Data Analysis",
+    "exploratory":                         "Data Analysis",
+    "predictive modeling":                 "Machine Learning",
+    "product metrics":                     "Product Analytics",
+    "communication":                       "Soft Skills",
+    "machine learning":                    "Machine Learning",
+    "deep learning":                       "Deep Learning",
+    "data preprocessing":                  "Data Engineering",
+    "model evaluation":                    "Machine Learning",
+    "svm":                                 "Machine Learning",
+    "support vector":                      "Machine Learning",
+    "logistic regression":                 "Machine Learning",
+    "bias":                                "Machine Learning",
+    "variance":                            "Machine Learning",
+    "overfitting":                         "Machine Learning",
+    "cross-validation":                    "Machine Learning",
+    "missing":                             "Data Engineering",
+    "outlier":                             "Data Engineering",
+    "imbalanced":                          "Machine Learning",
 }
 
 _SEEN_HASHES: set = set()
@@ -182,14 +182,14 @@ def infer_code_expected(q: str) -> bool:
                                   "write a function", "write an algorithm", "sql query"])
 
 
-def resolve_topic(raw: str) -> tuple:
+def resolve_topic(raw: str) -> str:
     key = raw.lower().strip()
     if key in TOPIC_MAP:
         return TOPIC_MAP[key]
     for k, v in TOPIC_MAP.items():
         if k in key:
             return v
-    return ("Data Science", raw.strip().title())
+    return "Data Science"
 
 
 _STUB_PHRASES = (
@@ -202,7 +202,6 @@ def build_question(
     question_text: str,
     ideal_answer:  str,
     topic:         str,
-    subtopic:      str | None = None,
     difficulty:    str = "medium",
     code_expected: bool = False,
 ) -> QuestionCreate | None:
@@ -225,7 +224,6 @@ def build_question(
     return QuestionCreate(
         role=ROLE,
         topic=topic,
-        subtopic=subtopic,
         difficulty=difficulty,
         experience_level=DIFFICULTY_TO_LEVEL.get(difficulty, "junior"),
         question_type=DIFFICULTY_TO_QTYPE.get(difficulty, "Technical"),
@@ -233,16 +231,15 @@ def build_question(
         ideal_answer=ideal_answer or None,
         keywords=", ".join(kws),
         code_expected=code_expected,
-        verified=True,
     )
 
 
-def _guess_topic(text: str, fallback_t: str, fallback_s: str) -> tuple:
+def _guess_topic(text: str, fallback_t: str, fallback_s: str) -> str:
     t = text.lower()
     for k, v in TOPIC_MAP.items():
         if k in t:
             return v
-    return fallback_t, fallback_s
+    return fallback_t
 
 
 def _guess_diff(text: str, fallback: str = "medium") -> str:
@@ -262,13 +259,13 @@ def _parse_alexeygrigorev(md: str) -> list:
       <br/>
     """
     questions = []
-    current_topic, current_subtopic = "Machine Learning", None
+    current_topic = "Machine Learning"
     lines = md.splitlines()
     i = 0
     while i < len(lines):
         line = lines[i]
         if line.startswith("## "):
-            current_topic, current_subtopic = resolve_topic(line[3:].strip())
+            current_topic = resolve_topic(line[3:].strip())
             i += 1
             continue
         bold = re.match(r'\*\*(.+?)\*\*\s*$', line.strip())
@@ -291,7 +288,7 @@ def _parse_alexeygrigorev(md: str) -> list:
                     answer_parts.append(nxt)
                 j += 1
             ideal = "\n".join(answer_parts).strip()
-            q = build_question(q_raw, ideal, current_topic, current_subtopic, difficulty)
+            q = build_question(q_raw, ideal, current_topic, difficulty)
             if q:
                 questions.append(q)
             i = j
@@ -355,9 +352,9 @@ def _parse_youssefhosni(md: str, def_t: str, def_s: str, def_d: str) -> list:
             r'\n?The rest of the answer is\s*\[here\].*',
             '', rest, flags=re.IGNORECASE
         ).strip()
-        topic, subtopic = _guess_topic(first_line, def_t, def_s)
+        topic = _guess_topic(first_line, def_t, def_s)
         diff = _guess_diff(first_line, def_d)
-        q = build_question(first_line, rest, topic, subtopic, diff)
+        q = build_question(first_line, rest, topic, diff)
         if q:
             questions.append(q)
     return questions
@@ -395,9 +392,9 @@ def _parse_iamtodor(md: str) -> list:
             continue
         q_text = lines[0].strip()
         answer = "\n".join(lines[1:]).strip()
-        topic, subtopic = _guess_topic(q_text, "Machine Learning", "General ML")
+        topic = _guess_topic(q_text, "Machine Learning", "General ML")
         diff = _guess_diff(q_text)
-        q = build_question(q_text, answer, topic, subtopic, diff)
+        q = build_question(q_text, answer, topic, diff)
         if q:
             questions.append(q)
     return questions
@@ -449,7 +446,7 @@ def _parse_kojino(md: str, topic: str, subtopic: str) -> list:
                 answer_lines.append(s)
         answer = "\n".join(answer_lines).strip() or "Refer to source material for a detailed answer."
         diff = _guess_diff(q_text)
-        q = build_question(q_text, answer, topic, subtopic, diff)
+        q = build_question(q_text, answer, topic, diff)
         if q:
             questions.append(q)
     return questions
@@ -493,9 +490,9 @@ def scrape_roadmap() -> list:
         a_text = a_el.get_text(separator="\n", strip=True)
         if len(q_text) < 10:
             continue
-        topic, subtopic = _guess_topic(q_text, "Data Science", "General")
+        topic = _guess_topic(q_text, "Data Science", "General")
         diff = _guess_diff(q_text)
-        q = build_question(q_text, a_text, topic, subtopic, diff)
+        q = build_question(q_text, a_text, topic, diff)
         if q:
             questions.append(q)
     # Try __NEXT_DATA__ JSON
@@ -518,9 +515,9 @@ def scrape_roadmap() -> list:
                     a_text = item.get("answer", "").strip()
                     if not q_text:
                         continue
-                    topic, subtopic = _guess_topic(q_text, "Data Science", "General")
+                    topic = _guess_topic(q_text, "Data Science", "General")
                     diff = _guess_diff(q_text)
-                    q = build_question(q_text, a_text, topic, subtopic, diff)
+                    q = build_question(q_text, a_text, topic, diff)
                     if q:
                         questions.append(q)
             except Exception:
@@ -1039,7 +1036,6 @@ def get_supplemental_questions() -> list:
             question_text=item["question"],
             ideal_answer=item["answer"],
             topic=item["topic"],
-            subtopic=item.get("subtopic"),
             difficulty=item.get("difficulty", "medium"),
         )
         if q:

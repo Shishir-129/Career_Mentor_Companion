@@ -61,7 +61,6 @@ def _fetch_candidates(db, role, level, interview_type, difficulty_norm):
             Questions.role == role,
             Questions.question_text.isnot(None),
             Questions.ideal_answer.isnot(None),
-            Questions.verified == True,
             Questions.code_expected == False,
         )
     )
@@ -151,8 +150,6 @@ def _diverse_select(candidates: list, count: int, difficulty_norm: str) -> list:
             score = 0.0
             if (q.difficulty or "").lower() == difficulty_norm:
                 score += 0.20
-            if q.verified:
-                score += 0.10
             asked = q.times_asked or 0
             if asked == 0:
                 score += 0.15
@@ -189,8 +186,6 @@ def _diverse_select(candidates: list, count: int, difficulty_norm: str) -> list:
             score = 0
             if (q.difficulty or "").lower() == difficulty_norm:
                 score += 3
-            if q.verified:
-                score += 2
             score -= (q.times_asked or 0)
             return -score  # negate for ascending sort
 

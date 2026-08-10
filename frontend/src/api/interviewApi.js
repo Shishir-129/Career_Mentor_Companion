@@ -63,15 +63,17 @@ export const submitAudioResponse = async ({ sessionId, userId, questionId, quest
 };
 
 // ✅ PATCH /sessions/{session_id}/end — mark session as completed
-export const completeSession = async (sessionId) => {
+// Backend will automatically set: answered (from response count), completed (if answered == 5)
+export const completeSession = async (sessionId, overallScore = null) => {
     try {
+        const payload = {};
+        if (overallScore !== null) {
+            payload.total_score = overallScore;
+        }
+        
         const res = await axios.patch(
             `${BASE_URL}/sessions/${sessionId}/end`,
-            {
-                total_questions: 5,
-                answered: 5,
-                completed: true,
-            }
+            payload
         );
         return res.data;
     } catch (err) {

@@ -11,14 +11,10 @@ class SessionResponse(BaseModel):
     user_id: int
     role: Optional[str]
     total_score: Optional[float]
-    theory_score: Optional[float]
-    technical_score: Optional[float]
-    total_questions: Optional[int]
-    answered: Optional[int]
-    duration_secs: Optional[int]
+    total_questions: int
+    answered: int
     completed: bool
     started_at: datetime
-    ended_at: Optional[datetime]
 
     class Config:
         from_attributes = True
@@ -26,9 +22,4 @@ class SessionResponse(BaseModel):
 
 class SessionEnd(BaseModel):
     total_score: Optional[float] = None
-    theory_score: Optional[float] = None
-    technical_score: Optional[float] = None
-    total_questions: Optional[int] = None
-    answered: Optional[int] = None
-    duration_secs: Optional[int] = None
 
