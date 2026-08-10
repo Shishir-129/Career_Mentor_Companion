@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Date, Text, Boolean, DateTime, ForeignKey, Float
+from sqlalchemy import Column, Integer, String, Date, Text, Boolean, DateTime, ForeignKey, Float, JSON
 from .connection import Base
 from datetime import datetime, timezone
 
@@ -30,6 +30,7 @@ class Questions(Base):
     question_type = Column(String(30), nullable=False)
     question_text = Column(Text)
     ideal_answer = Column(Text)
+    answers = Column(JSON, nullable=True)  # JSONB: {"ideal": "answer1", "alternatives": ["answer2", "answer3"]}
     keywords = Column(Text)
     expected_components = Column(Text, nullable=True)  # JSON array e.g. '["definition","example"]'
     code_expected = Column(Boolean, default=False)
