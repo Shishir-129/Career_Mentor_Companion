@@ -75,9 +75,9 @@ def get_user_sessions(user_id: int, db: Session = Depends(get_db)):
                 'role': session.role,
                 'completed': session.completed,
                 'started_at': session.started_at,
-                'ended_at': session.ended_at,
-                'responses_count': len(responses),
-                'overall_score': overall_score,
+                'answered': session.answered,
+                'total_questions': session.total_questions,
+                'overall_score': session.total_score or overall_score,
                 'scores': scores
             })
         
