@@ -6,8 +6,11 @@ from typing import Optional
 class WeakAreaBase(BaseModel):
     role: Optional[str] = None
     topic: Optional[str] = None
-    question_type: Optional[str] = None
-    avg_score: Optional[float] = None
+    semantic_avg: Optional[float] = 0
+    keyword_avg: Optional[float] = 0
+    completeness_avg: Optional[float] = 0
+    confidence_avg: Optional[float] = 0
+    grammar_avg: Optional[float] = 0
     attempt_count: Optional[int] = 0
 
 
@@ -16,7 +19,12 @@ class WeakAreaCreate(WeakAreaBase):
 
 
 class WeakAreaScoreUpdate(BaseModel):
-    avg_score: float
+    """Update scores for a weak area (triggered by session completion)"""
+    semantic_avg: float
+    keyword_avg: float
+    completeness_avg: float
+    confidence_avg: float
+    grammar_avg: float
     attempt_count: Optional[int] = None
 
 

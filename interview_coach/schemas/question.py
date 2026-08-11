@@ -35,6 +35,7 @@ class QuestionResponse(BaseModel):
 
         
 class SessionRequest(BaseModel):
+    user_id: int        # User ID for tracking question history
     role: str           # "Data Analyst" | "Data Scientist" | ...
     level: str          # "fresher" | "junior" | "mid-level" | "senior"
     interview_type: str # "Technical" | "Behavioral" | "Theoretical" | "Mixed"

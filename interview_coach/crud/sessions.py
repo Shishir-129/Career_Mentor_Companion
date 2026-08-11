@@ -1,5 +1,5 @@
 from sqlalchemy.orm import Session
-from database.models import Sessions
+from database.models import Sessions, Responses
 from schemas.session import SessionCreate, SessionEnd
 from datetime import datetime, timezone
 
@@ -29,8 +29,6 @@ def end_session(db: Session, session_id: int, data: SessionEnd):
     if not session:
         return None
 
-    # Get all responses for this session
-    from database.models import Responses
     responses = db.query(Responses).filter(Responses.session_id == session_id).all()
     answered_count = len(responses)
 
@@ -56,6 +54,12 @@ def end_session(db: Session, session_id: int, data: SessionEnd):
 
     db.commit()
     db.refresh(session)
+    
+    # ✅ Calculate weak areas after session completes
+    if session.completed:
+        from services.weak_areas_calculator import calculate_and_update_weak_areas
+        calculate_and_update_weak_areas(db, session_id, session.user_id, session.role)
+    
     return session
 
 
