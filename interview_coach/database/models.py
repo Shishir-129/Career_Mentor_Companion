@@ -82,12 +82,19 @@ class UserWeakAreas(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
-    role = Column(String(100))
-    topic = Column(String(100))
-    question_type = Column(String(30))
-    avg_score = Column(Float)
-    attempt_count = Column(Integer, default=0)
-    last_updated = Column(DateTime, default=now)
+    role = Column(String(100))                           # User's target role
+    topic = Column(String(100))                         # Topic (SQL, Python, ML, etc.)
+    
+    # ✅ 5 Scoring Dimensions (0-100) - averaged from responses for this topic
+    semantic_avg = Column(Float, default=0)             # Conceptual Understanding
+    keyword_avg = Column(Float, default=0)              # Technical Vocabulary
+    completeness_avg = Column(Float, default=0)         # Answer Structure
+    confidence_avg = Column(Float, default=0)           # Delivery & Confidence
+    grammar_avg = Column(Float, default=0)              # Language Clarity
+    
+    # Tracking
+    attempt_count = Column(Integer, default=0)          # Cumulative: how many times this topic was seen
+    last_updated = Column(DateTime, default=now)        # When scores were last recalculated
 
 
 class UserQuestionHistory(Base):

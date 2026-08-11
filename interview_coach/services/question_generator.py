@@ -1,6 +1,7 @@
 import random
 from sqlalchemy.orm import Session
 from database.models import Questions
+from crud.question_history import increment_question_seen
 
 # Difficulty adjacency — controls fallback ordering
 _DIFFICULTY_ORDER = ["easy", "medium", "hard"]
@@ -8,6 +9,7 @@ _DIFFICULTY_ORDER = ["easy", "medium", "hard"]
 
 def get_questions_for_session(
     db: Session,
+    user_id: int,
     role: str,
     level: str,
     interview_type: str,
@@ -40,8 +42,11 @@ def get_questions_for_session(
         selected = _diverse_select(candidates, count, difficulty_norm)
 
     # ── 3. Increment times_asked so future sessions see fresh questions ───────
+    # AND track in user_question_history for user-specific analytics
     for q in selected:
         q.times_asked = (q.times_asked or 0) + 1
+        # Track this question as seen by this user
+        increment_question_seen(db, user_id, q.id)
     db.commit()
 
     return selected
