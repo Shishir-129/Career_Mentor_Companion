@@ -145,32 +145,26 @@ def _add_page_break(doc: Document):
 
 def load_questions() -> dict:
     """
-    Returns dict:  topic → subtopic → list[Questions]
+    Returns dict:  topic → list[Questions]
     """
     db = SessionLocal()
     try:
         rows = db.query(Questions).filter(
             Questions.role == "Data Scientist",
-            Questions.verified == True,
         ).order_by(
             Questions.topic,
-            Questions.subtopic,
             Questions.difficulty,
         ).all()
     finally:
         db.close()
 
-    organized: dict = defaultdict(lambda: defaultdict(list))
+    organized: dict = defaultdict(list)
     for row in rows:
-        t = row.topic    or "General"
-        s = row.subtopic or "General"
-        organized[t][s].append(row)
+        t = row.topic or "General"
+        organized[t].append(row)
 
-    # Sort topics and subtopics
-    return {
-        t: dict(sorted(subs.items()))
-        for t, subs in sorted(organized.items())
-    }
+    # Sort topics
+    return dict(sorted(organized.items()))
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -301,33 +295,27 @@ def build_docx(organized: dict, output_path: str):
     toc_h = doc.add_heading("Table of Contents", level=1)
     _set_heading_color(toc_h, RGBColor(0x00, 0x3E, 0x8F))
 
-    for topic, subs in organized.items():
+    for topic, qs in organized.items():
         tp = doc.add_paragraph(style="No Spacing")
         tp.paragraph_format.space_before = Pt(6)
         tr = tp.add_run(f"  {topic}")
         tr.bold = True
         tr.font.size = Pt(11)
-        for subtopic, qs in subs.items():
-            sp = doc.add_paragraph(style="No Spacing")
-            sp.paragraph_format.left_indent = Inches(0.4)
-            sp.add_run(f"    ▸ {subtopic}  ({len(qs)} questions)").font.size = Pt(10)
+        sp = doc.add_paragraph(style="No Spacing")
+        sp.paragraph_format.left_indent = Inches(0.4)
+        sp.add_run(f"    ({len(qs)} questions)").font.size = Pt(10)
 
     _add_page_break(doc)
 
     # ═══════════════════════════════════════════════════════════════
-    # Q&A CONTENT  (Topic → Subtopic → Questions)
+    # Q&A CONTENT  (Topic → Questions)
     # ═══════════════════════════════════════════════════════════════
     global_q_num = 1
 
-    for topic, subs in organized.items():
+    for topic, qs in organized.items():
         # Topic heading
         th = doc.add_heading(topic, level=1)
         _set_heading_color(th, RGBColor(0x00, 0x3E, 0x8F))
-
-        for subtopic, qs in subs.items():
-            # Subtopic heading
-            sh2 = doc.add_heading(subtopic, level=2)
-            _set_heading_color(sh2, RGBColor(0x1F, 0x5C, 0x99))
 
             for row in qs:
                 diff   = (row.difficulty or "medium").lower()

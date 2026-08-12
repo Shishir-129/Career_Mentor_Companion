@@ -49,6 +49,7 @@ def remove_question(question_id: int, db: Session = Depends(get_db)):
 def questions_for_session(request: SessionRequest, db: Session = Depends(get_db)):
     questions = get_questions_for_session(
         db,
+        request.user_id,
         request.role,
         request.level,
         request.interview_type,

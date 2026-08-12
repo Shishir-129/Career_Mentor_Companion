@@ -79,25 +79,44 @@ export default function WeakAreas() {
 
     const fetchData = async () => {
         try {
-            const res = await axios.get(`${BASE_URL}/sessions/user/${userId}/history`);
-            const completed = res.data.filter(s => s.completed);
-            setSessionCount(completed.length);
+            // ✅ Fetch pre-calculated weak areas by topic from backend
+            const weakAreasRes = await axios.get(`${BASE_URL}/weak-areas/user/${userId}`);
+            const weakAreas = weakAreasRes.data;
+            
+            // Get session count for display
+            const sessionsRes = await axios.get(`${BASE_URL}/sessions/user/${userId}/history`);
+            const sessionCount = sessionsRes.data.filter(s => s.completed).length;
+            setSessionCount(sessionCount);
 
-            if (completed.length === 0) { setScores(null); return; }
+            if (weakAreas.length === 0) {
+                setScores(null);
+                return;
+            }
 
-            // Average each dimension across all completed sessions
-            const avg = (key) => {
-                const vals = completed.map(s => s.scores?.[key] || 0).filter(v => v > 0);
-                return vals.length ? Math.round(vals.reduce((a, b) => a + b, 0) / vals.length) : 0;
+            // Aggregate scores across all topics to show global skill breakdown
+            const aggregateScores = (weakAreas) => {
+                if (!weakAreas.length) return null;
+                
+                return {
+                    semantic_avg: Math.round(
+                        weakAreas.reduce((sum, wa) => sum + (wa.semantic_avg || 0), 0) / weakAreas.length
+                    ),
+                    keyword_avg: Math.round(
+                        weakAreas.reduce((sum, wa) => sum + (wa.keyword_avg || 0), 0) / weakAreas.length
+                    ),
+                    completeness_avg: Math.round(
+                        weakAreas.reduce((sum, wa) => sum + (wa.completeness_avg || 0), 0) / weakAreas.length
+                    ),
+                    confidence_avg: Math.round(
+                        weakAreas.reduce((sum, wa) => sum + (wa.confidence_avg || 0), 0) / weakAreas.length
+                    ),
+                    grammar_avg: Math.round(
+                        weakAreas.reduce((sum, wa) => sum + (wa.grammar_avg || 0), 0) / weakAreas.length
+                    ),
+                };
             };
 
-            setScores({
-                semantic_avg:     avg("semantic_avg"),
-                keyword_avg:      avg("keyword_avg"),
-                completeness_avg: avg("completeness_avg"),
-                confidence_avg:   avg("confidence_avg"),
-                grammar_avg:      avg("grammar_avg"),
-            });
+            setScores(aggregateScores(weakAreas));
         } catch (err) {
             console.error(err);
         } finally {

@@ -183,7 +183,7 @@ function SessionRow({ session }) {
             <div className="session-score" style={{ color }}>{score}</div>
             <div className="session-info">
                 <span className="session-role">{session.role}</span>
-                <span className="session-date">{date} • {session.responses_count} Q answered</span>
+                <span className="session-date">{date} • {session.answered}/{session.total_questions} Q answered</span>
             </div>
             <div className="session-scores">
                 <ScoreChip label="Answer Quality" value={Math.round(session.scores?.answer_quality_avg || 0)} />
