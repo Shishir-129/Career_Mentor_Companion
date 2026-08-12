@@ -26,9 +26,14 @@ def get_semantic_label(score: float) -> str:
         return "Poor"
 
 
-def compute_semantic_score(user_answer: str, ideal_answer: str) -> dict:
+def compute_semantic_score(
+    user_answer: str,
+    ideal_answer: str,
+    alternatives: list[str] | None = None,
+) -> dict:
     """
     Compute semantic similarity between user's answer and the ideal answer.
+    If alternatives are provided, returns the best score across all candidates.
 
     Returns:
         score     — float between 0 and 100
@@ -40,13 +45,16 @@ def compute_semantic_score(user_answer: str, ideal_answer: str) -> dict:
     if not ideal_answer or not ideal_answer.strip():
         return {"score": 0.0, "label": "Poor"}
 
+    # Build list of all reference answers to compare against
+    candidates = [ideal_answer] + [a for a in (alternatives or []) if a and a.strip()]
+
     user_embedding = _model.encode(user_answer, convert_to_tensor=True)
-    ideal_embedding = _model.encode(ideal_answer, convert_to_tensor=True)
+    candidate_embeddings = _model.encode(candidates, convert_to_tensor=True)
 
-    # cos_sim returns a tensor; .item() converts to Python float
-    similarity = util.cos_sim(user_embedding, ideal_embedding).item()
+    # Take the best similarity across all candidates
+    similarities = util.cos_sim(user_embedding, candidate_embeddings)[0]
+    best_similarity = float(similarities.max().item())
 
-    # Cosine similarity range is [-1, 1]; clamp to [0, 1] then scale to 100
-    score = round(max(0.0, similarity) * 100, 2)
+    score = round(max(0.0, best_similarity) * 100, 2)
 
     return {"score": score, "label": get_semantic_label(score)}

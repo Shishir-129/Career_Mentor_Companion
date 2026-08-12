@@ -126,6 +126,14 @@ def create_response_from_audio(
     keywords_str        = (question.keywords            or "") if question else ""
     expected_components = (question.expected_components or "") if question else ""
     q_text              = (question.question_text       or "") if question else ""
+    # Extract alternative answers from the JSON column
+    alternatives: list[str] = []
+    if question and question.answers:
+        try:
+            ans_data = question.answers if isinstance(question.answers, dict) else json.loads(question.answers)
+            alternatives = [a for a in ans_data.get("alternatives", []) if a and str(a).strip()]
+        except (ValueError, TypeError):
+            pass
     print(f"✓ Question fetched")
 
     # ── 3. Confidence / delivery scoring ─────────────────────────────────────────
@@ -143,6 +151,7 @@ def create_response_from_audio(
         keywords_str=keywords_str,
         expected_components_json=expected_components,
         question_text=q_text,
+        alternatives=alternatives,
     )
 
     # ── 5. Generate feedback ──────────────────────────────────────────────────

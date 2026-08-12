@@ -31,6 +31,7 @@ def compute_answer_quality_score(
     keywords_str: str | None,
     expected_components_json: str | None,
     question_text: str = "",
+    alternatives: list[str] | None = None,
 ) -> dict:
     """
     Aggregates three sub-scores into a single Answer Quality Score.
@@ -51,7 +52,7 @@ def compute_answer_quality_score(
     """
     try:
         # ── Semantic score ─────────────────────────────────────────────────────
-        sem = compute_semantic_score(user_answer, ideal_answer)
+        sem = compute_semantic_score(user_answer, ideal_answer, alternatives=alternatives)
         semantic_score = sem["score"]
 
         # ── Keyword score ──────────────────────────────────────────────────────
@@ -67,6 +68,7 @@ def compute_answer_quality_score(
             expected_components_json=expected_components_json,
             ideal_answer=ideal_answer,
             question_text=question_text,
+            alternatives=alternatives,
         )
         completeness_score = comp["completeness_score"]
 
