@@ -108,6 +108,7 @@ def compute_completeness_score(
     expected_components_json: str | None,
     ideal_answer: str | None = None,
     question_text: str | None = None,
+    alternatives: list[str] | None = None,
 ) -> dict:
     """
     Returns:
@@ -173,11 +174,13 @@ def compute_completeness_score(
 
         # ── Path B: keyword-coverage (no verified components) ───────────────
         if ideal_answer and ideal_answer.strip():
-            coverage      = _keyword_coverage(answer_lower, ideal_answer)
+            # Use the best-matching candidate (ideal + alternatives)
+            candidates = [ideal_answer] + [a for a in (alternatives or []) if a and a.strip()]
+            best_coverage = max(_keyword_coverage(answer_lower, c) for c in candidates)
+            # Length ratio based on the primary ideal answer
             ideal_wc      = len(ideal_answer.split())
-            # Length ratio: user should give proportional depth to ideal
             length_ratio  = min(word_count / max(ideal_wc * 0.4, 1), 1.0)
-            score         = coverage * length_ratio * 100
+            score         = best_coverage * length_ratio * 100
         else:
             # No ideal and no components: can only judge length
             score = min(50.0, word_count * 1.5)
