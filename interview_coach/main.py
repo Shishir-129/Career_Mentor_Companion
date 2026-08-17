@@ -50,7 +50,11 @@ app = FastAPI(title="Interview Coach API", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://localhost:5174"],
+    allow_origins=[
+        "http://localhost:5173",  # local
+        "http://localhost:5174",  # local
+        "",  # deployed: set this to the deployed frontend URL
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
