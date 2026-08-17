@@ -1,3 +1,4 @@
+import json
 from services.semantic_score import compute_semantic_score
 from services.keyword_score import compute_keyword_score
 from services.completeness_score import compute_completeness_score
@@ -32,9 +33,16 @@ def compute_answer_quality_score(
     expected_components_json: str | None,
     question_text: str = "",
     alternatives: list[str] | None = None,
+    alternative_answer_keywords: dict | None = None,
+    alternative_answer_components: dict | None = None,
 ) -> dict:
     """
     Aggregates three sub-scores into a single Answer Quality Score.
+
+    Strategy:
+    1. Semantic scoring finds the BEST matching reference answer (ideal or alternative).
+    2. Keyword + completeness scoring use THAT answer's keywords/components — not always
+       the ideal's — so the user is graded fairly against the style they actually matched.
 
     answer_quality_score = (semantic × 0.50)
                          + (keyword  × 0.30)
@@ -48,31 +56,57 @@ def compute_answer_quality_score(
         completeness_score    — float 0–100
         missed_keywords       — list[str]
         components_missing    — list[str]
-        coaching_tips         — list[str]  (from completeness scorer)
+        coaching_tips         — list[str]
+        matched_answer_type   — "ideal" or "alternative_N"
     """
     try:
-        # ── Semantic score ─────────────────────────────────────────────────────
+        # ── Step 1: Semantic score — also tells us which reference answer matched best ─
         sem = compute_semantic_score(user_answer, ideal_answer, alternatives=alternatives)
         semantic_score = sem["score"]
+        best_index     = sem["best_index"]
+        best_answer    = sem["best_answer"]
 
-        # ── Keyword score ──────────────────────────────────────────────────────
-        if keywords_str and keywords_str.strip():
-            keyword_score, missed_keywords = compute_keyword_score(user_answer, keywords_str)
+        print(f"Best match: {'ideal' if best_index == 0 else f'alternative_{best_index - 1}'} (score={semantic_score}%)")
+
+        # ── Step 2: Pick keywords/components for the best matching answer ─────────────
+        if best_index == 0:
+            # Matched the ideal answer — use its stored keywords and components
+            active_keywords_str    = keywords_str
+            active_components_json = expected_components_json
+        else:
+            # Matched an alternative — use that alternative's pre-stored metadata
+            alt_key = f"alternative_{best_index - 1}"
+
+            alt_kw_list = []
+            if alternative_answer_keywords and isinstance(alternative_answer_keywords, dict):
+                alt_kw_list = alternative_answer_keywords.get(alt_key, [])
+            # Fall back to ideal's keywords if alternative has none
+            active_keywords_str = ", ".join(alt_kw_list) if alt_kw_list else keywords_str
+
+            alt_comp_list = []
+            if alternative_answer_components and isinstance(alternative_answer_components, dict):
+                alt_comp_list = alternative_answer_components.get(alt_key, [])
+            # Fall back to ideal's components if alternative has none
+            active_components_json = json.dumps(alt_comp_list) if alt_comp_list else expected_components_json
+
+        # ── Step 3: Keyword score against the best answer's keywords ──────────────────
+        if active_keywords_str and active_keywords_str.strip():
+            keyword_score, missed_keywords = compute_keyword_score(user_answer, active_keywords_str)
         else:
             keyword_score   = 0.0
             missed_keywords = []
 
-        # ── Completeness score ─────────────────────────────────────────────────
+        # ── Step 4: Completeness score against the best answer ────────────────────────
         comp = compute_completeness_score(
             user_answer=user_answer,
-            expected_components_json=expected_components_json,
-            ideal_answer=ideal_answer,
+            expected_components_json=active_components_json,
+            ideal_answer=best_answer,   # use best matched answer, not always the ideal
             question_text=question_text,
-            alternatives=alternatives,
+            alternatives=None,          # already resolved the best match above
         )
         completeness_score = comp["completeness_score"]
 
-        # ── Weighted aggregate ─────────────────────────────────────────────────
+        # ── Step 5: Weighted aggregate ────────────────────────────────────────────────
         answer_quality_score = round(
             semantic_score     * WEIGHTS["semantic"]     +
             keyword_score      * WEIGHTS["keyword"]      +
@@ -89,12 +123,12 @@ def compute_answer_quality_score(
             "missed_keywords":      missed_keywords,
             "components_missing":   comp["components_missing"],
             "coaching_tips":        comp["coaching_tips"],
+            "matched_answer_type":  "ideal" if best_index == 0 else f"alternative_{best_index - 1}",
         }
     except Exception as e:
         import logging, traceback
         logging.getLogger(__name__).error("Answer quality scoring error: %s", e)
         traceback.print_exc()
-        # Return safe default on error
         return {
             "answer_quality_score": 50.0,
             "quality_label": "Average",
@@ -104,4 +138,5 @@ def compute_answer_quality_score(
             "missed_keywords": [],
             "components_missing": [],
             "coaching_tips": ["Please check your answer and try again"],
+            "matched_answer_type": "ideal",
         }

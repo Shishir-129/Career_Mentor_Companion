@@ -126,6 +126,8 @@ def create_response_from_audio(
     keywords_str        = (question.keywords            or "") if question else ""
     expected_components = (question.expected_components or "") if question else ""
     q_text              = (question.question_text       or "") if question else ""
+    alt_keywords        = (question.alternative_answer_keywords   or {}) if question else {}
+    alt_components      = (question.alternative_answer_components or {}) if question else {}
     # Extract alternative answers from the JSON column
     alternatives: list[str] = []
     if question and question.answers:
@@ -134,7 +136,7 @@ def create_response_from_audio(
             alternatives = [a for a in ans_data.get("alternatives", []) if a and str(a).strip()]
         except (ValueError, TypeError):
             pass
-    print(f"✓ Question fetched")
+    print(f"✓ Question fetched ({len(alternatives)} alternatives)")
 
     # ── 3. Confidence / delivery scoring ─────────────────────────────────────────
     conf = compute_delivery_scores(
@@ -144,7 +146,7 @@ def create_response_from_audio(
         question_text=q_text,
     )
 
-    # ── 4. Answer quality scoring (transcript vs ideal answer) ────────────────────
+    # ── 4. Answer quality scoring (transcript vs best reference answer) ────────────
     quality = compute_answer_quality_score(
         user_answer=transcript,
         ideal_answer=ideal_answer,
@@ -152,6 +154,8 @@ def create_response_from_audio(
         expected_components_json=expected_components,
         question_text=q_text,
         alternatives=alternatives,
+        alternative_answer_keywords=alt_keywords,
+        alternative_answer_components=alt_components,
     )
 
     # ── 5. Generate feedback ──────────────────────────────────────────────────
