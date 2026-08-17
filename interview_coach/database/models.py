@@ -32,6 +32,11 @@ class Questions(Base):
     answers = Column(JSON, nullable=True)  # JSONB: {"ideal": "answer1", "alternatives": ["answer2", "answer3"]}
     keywords = Column(Text)
     expected_components = Column(Text, nullable=True)  # JSON array e.g. '["definition","example"]'
+
+    # Alternative answers metadata
+    alternative_answer_keywords = Column(JSON, nullable=True)  # JSON: {"alternative_0": [...], "alternative_1": [...]}
+    alternative_answer_components = Column(JSON, nullable=True)  # JSON: {"alternative_0": [...], "alternative_1": [...]}
+
     code_expected = Column(Boolean, default=False)
     times_asked = Column(Integer, default=0)
     created_at = Column(DateTime, default=now)

@@ -161,6 +161,10 @@ export default function WeakAreas() {
                     <div className="wa-empty">
                         <p>No completed sessions yet. Your skill breakdown will appear here after your first interview.</p>
                     </div>
+                ) : !scores ? (
+                    <div className="wa-empty">
+                        <p>Skill data is being processed. Complete a full interview session (all 5 questions) to see your breakdown.</p>
+                    </div>
                 ) : (
                     <div className="wa-list">
                         {sorted.map(dim => {
