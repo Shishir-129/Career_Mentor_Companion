@@ -24,8 +24,9 @@ export const createSession = async (userId, role) => {
 };
 
 // POST /questions/for-session — fetch questions matching role + level + difficulty
-export const getQuestionsForSession = async (role, level, interviewType, difficulty, count = 5) => {
+export const getQuestionsForSession = async (userId, role, level, interviewType, difficulty, count = 5) => {
     const res = await axios.post(`${BASE_URL}/questions/for-session`, {
+        user_id: userId,
         role,
         level,
         interview_type: interviewType,
@@ -80,4 +81,14 @@ export const completeSession = async (sessionId, overallScore = null) => {
         console.error("Error completing session:", err);
         throw err;
     }
+};
+
+// POST /ratings/ — submit 1-5 session feedback rating
+export const submitSessionRating = async (sessionId, userId, rating) => {
+    const res = await axios.post(`${BASE_URL}/ratings/`, {
+        session_id: sessionId,
+        user_id: userId,
+        rating,
+    });
+    return res.data;
 };

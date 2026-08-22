@@ -17,6 +17,7 @@ from routers.sessions import router as session_router
 from routers.responses import router as response_router
 from routers import weak_areas
 from routers import question_history
+from routers import ratings
 from schemas.response import ResponseResponse
 
 log = logging.getLogger("uvicorn.error")
@@ -66,6 +67,7 @@ app.include_router(session_router)
 app.include_router(response_router)
 app.include_router(weak_areas.router)
 app.include_router(question_history.router)
+app.include_router(ratings.router)
 
 UPLOAD_DIR = Path("uploads")
 UPLOAD_DIR.mkdir(exist_ok=True)

@@ -2,7 +2,7 @@
 import { useState, useRef, useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import Sidebar from "../components/Sidebar";
-import { createSession, getQuestionsForSession, submitAudioResponse, completeSession } from "../api/interviewApi";
+import { createSession, getQuestionsForSession, submitAudioResponse, completeSession, submitSessionRating } from "../api/interviewApi";
 import { FiMic, FiSquare, FiChevronRight } from "react-icons/fi";
 import "./StartInterview.css";
 import { getUserId } from "../api/config";
@@ -35,6 +35,9 @@ export default function StartInterview() {
     const timerRef = useRef(null);
     const completedRef = useRef(false);
 
+    const [rating, setRating] = useState(0);
+    const [ratingSubmitted, setRatingSubmitted] = useState(false);
+
     const userId = getUserId();
 
     useEffect(() => {
@@ -44,6 +47,7 @@ export default function StartInterview() {
                 const sessionData = await createSession(userId, role);
                 setSessionId(sessionData.id);
                 const questionsData = await getQuestionsForSession(
+                    userId,
                     role,
                     experience,
                     interviewType,
@@ -92,6 +96,17 @@ export default function StartInterview() {
 
     const formatTime = (s) =>
         `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
+
+    const handleRate = async (value) => {
+        setRating(value);
+        try {
+            await submitSessionRating(sessionId, userId, value);
+            setRatingSubmitted(true);
+        } catch (err) {
+            console.error("Error submitting rating:", err);
+            alert("Could not save your rating. Please try again.");
+        }
+    };
 
     const currentQuestion = questions[currentIndex];
 
@@ -255,6 +270,37 @@ export default function StartInterview() {
                     <p style={{ fontSize: "1rem", color: "#333", marginBottom: "2rem" }}>
                         Great job! Your session has been saved to your dashboard.
                     </p>
+
+                    <div style={{ marginBottom: "2rem" }}>
+                        <p style={{ fontSize: "1rem", color: "#333", marginBottom: "0.75rem" }}>
+                            How would you rate this session?
+                        </p>
+                        {ratingSubmitted ? (
+                            <p style={{ color: "#16a34a", fontWeight: 600 }}>
+                                ✅ Thanks for your feedback! You rated {rating}/5.
+                            </p>
+                        ) : (
+                            <div style={{ display: "flex", gap: "0.5rem", justifyContent: "center" }}>
+                                {[1, 2, 3, 4, 5].map((star) => (
+                                    <button
+                                        key={star}
+                                        onClick={() => handleRate(star)}
+                                        style={{
+                                            background: "none",
+                                            border: "none",
+                                            cursor: "pointer",
+                                            fontSize: "2rem",
+                                            lineHeight: 1,
+                                            color: star <= rating ? "#facc15" : "#d1d5db",
+                                        }}
+                                        aria-label={`Rate ${star} out of 5`}
+                                    >
+                                        ★
+                                    </button>
+                                ))}
+                            </div>
+                        )}
+                    </div>
 
                     <div style={{
                         display: "flex",

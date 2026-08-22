@@ -110,3 +110,13 @@ class UserQuestionHistory(Base):
     question_id = Column(Integer, ForeignKey("questions.id", ondelete="CASCADE"), nullable=False)
     times_seen = Column(Integer, default=0)
     last_seen = Column(DateTime, default=now)
+
+
+class SessionRatings(Base):
+    __tablename__ = "session_ratings"
+
+    id = Column(Integer, primary_key=True, index=True)
+    session_id = Column(Integer, ForeignKey("sessions.id", ondelete="CASCADE"), nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    rating = Column(Integer, nullable=False)  # 1-5 user feedback for the session
+    created_at = Column(DateTime, default=now)
