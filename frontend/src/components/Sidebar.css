@@ -5,12 +5,12 @@
     flex-shrink: 0;
     height: 100vh;
     background: #0d0f1a;
-    border-right: 1px solid #1f2333;
+    border-right: 1px solid #1a1d2e;
     display: flex;
     flex-direction: column;
     padding: 24px 20px;
     color: #fff;
-    font-family: 'Inter', sans-serif;
+    font-family: 'Plus Jakarta Sans', sans-serif;
 
     /* Fixed on desktop so it stays put while content scrolls */
     position: fixed;
@@ -33,11 +33,12 @@
     height: 40px;
     flex-shrink: 0;
     border-radius: 10px;
-    background: #4f7cff;
+    background: linear-gradient(135deg, #4f7cff, #3a5bd9);
     display: flex;
     align-items: center;
     justify-content: center;
     font-size: 18px;
+    box-shadow: 0 2px 8px rgba(79, 124, 255, 0.35);
 }
 
 .logo h2 {
@@ -70,7 +71,7 @@
     text-decoration: none;
     font-size: 14px;
     font-weight: 500;
-    transition: background 0.15s, color 0.15s;
+    transition: background 0.15s, color 0.15s, transform 0.1s;
     white-space: nowrap;
 }
 
@@ -86,8 +87,9 @@
 }
 
 .nav-item.active {
-    background: #4f7cff;
+    background: linear-gradient(135deg, #4f7cff, #3a5bd9);
     color: #fff;
+    box-shadow: 0 2px 8px rgba(79, 124, 255, 0.3);
 }
 
 /* ── User card ──────────────────────────────────────────────────────────── */

@@ -4,7 +4,7 @@ import { loginUser, registerUser } from "../api/interviewApi";
 import { setAuth } from "../api/config";
 import "./Login.css";
 
-const ROLES = ["Data Analyst", "Data Scientist", "DevOps Engineer"];
+const ROLES = ["Data Analyst", "Data Scientist"];
 
 export default function Login() {
     const [tab, setTab] = useState("login");

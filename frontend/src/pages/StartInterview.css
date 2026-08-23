@@ -16,7 +16,6 @@
     min-width: 0;
     width: 100%;
     padding: 24px clamp(16px, 3vw, 32px);
-    font-family: 'Inter', sans-serif;
     color: #fff;
     max-width: 1400px;
     margin: 0 auto;

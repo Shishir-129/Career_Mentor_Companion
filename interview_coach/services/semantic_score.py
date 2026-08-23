@@ -43,13 +43,29 @@ def compute_semantic_score(
         best_answer  — str: the reference answer text that matched best
     """
     if not user_answer or not user_answer.strip():
-        return {"score": 0.0, "label": "Poor", "best_index": 0, "best_answer": ideal_answer}
+        return {"score": 0.0, "label": "Poor", "best_index": 0, "best_answer": ideal_answer or ""}
 
+    valid_alts = [a for a in (alternatives or []) if a and a.strip()]
+
+    # When ideal is absent, score against alternatives only — preserve index mapping
+    # so best_index still means: 0=ideal, 1=alternative_0, 2=alternative_1, ...
     if not ideal_answer or not ideal_answer.strip():
-        return {"score": 0.0, "label": "Poor", "best_index": 0, "best_answer": ""}
+        if not valid_alts:
+            return {"score": 0.0, "label": "Poor", "best_index": 0, "best_answer": ""}
+        user_embedding = _model.encode(user_answer, convert_to_tensor=True)
+        alt_embeddings = _model.encode(valid_alts, convert_to_tensor=True)
+        sims = [float(s.item()) for s in util.cos_sim(user_embedding, alt_embeddings)[0]]
+        best_local = int(sims.index(max(sims)))
+        score = round(max(0.0, sims[best_local]) * 100, 2)
+        return {
+            "score":       score,
+            "label":       get_semantic_label(score),
+            "best_index":  best_local + 1,   # +1: index 0 (ideal) is absent
+            "best_answer": valid_alts[best_local],
+        }
 
-    # Build list of all reference answers to compare against
-    candidates = [ideal_answer] + [a for a in (alternatives or []) if a and a.strip()]
+    # Normal path: ideal exists — compare against all candidates
+    candidates = [ideal_answer] + valid_alts
 
     user_embedding = _model.encode(user_answer, convert_to_tensor=True)
     candidate_embeddings = _model.encode(candidates, convert_to_tensor=True)
