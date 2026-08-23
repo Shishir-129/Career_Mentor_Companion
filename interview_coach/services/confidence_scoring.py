@@ -17,21 +17,22 @@ _STOP_WORDS = {
 # ─── Filler word bank ─────────────────────────────────────────────────────────
 # Excludes context-dependent words like "so", "well", "like"
 FILLER_WORDS = {
-    "um", "uh", "ah", "eh", "hmm", "humm",
+    "um", "uh", "ah", "eh", "hmm", "umm", "uhh",
     "you know", "i mean", "kind of", "sort of",
     "literally", "basically", "actually", "right",
+    "like i said", "and um", "and uh",
 }
 
 # ─── Score weights — must sum to 1.0 ─────────────────────────────────────────
-# Grammar  35%: language quality, most evaluated by interviewers
-# Filler   30%: nervousness signal, highly noticeable
-# Pace     20%: clarity of delivery
-# Pause    15%: hesitation — some pauses are natural
+# Grammar  45%: language quality, most evaluated by interviewers
+# Filler    5%: Whisper cleans transcripts so filler count is unreliable
+# Pace     25%: clarity of delivery
+# Pause    25%: hesitation — detectable via librosa audio gaps
 WEIGHTS = {
-    "grammar": 0.35,
-    "filler":  0.30,
-    "pace":    0.20,
-    "pause":   0.15,
+    "grammar": 0.45,
+    "filler":  0.05,
+    "pace":    0.25,
+    "pause":   0.25,
 }
 
 # ─── Speaking pace bands (words per minute) ───────────────────────────────────

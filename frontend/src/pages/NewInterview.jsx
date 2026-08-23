@@ -4,7 +4,6 @@ import { useNavigate } from "react-router-dom";
 import "./NewInterview.css";
 import {
     FiCode,
-    FiActivity,
     FiGlobe,
     FiBookOpen,
     FiPlay,
@@ -14,7 +13,6 @@ import {
 const JOB_ROLES = [
     { id: "data-analyst", label: "Data Analyst", icon: FiCode },
     { id: "data-scientist", label: "Data Scientist", icon: FiGlobe },
-    { id: "devops-engineer", label: "Devops Engineer", icon: FiActivity }
 ];
 
 const EXPERIENCE_LEVELS = [
