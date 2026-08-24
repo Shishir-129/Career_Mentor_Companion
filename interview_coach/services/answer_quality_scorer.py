@@ -92,9 +92,15 @@ def compute_answer_quality_score(
         # ── Step 3: Keyword score against the best answer's keywords ──────────────────
         if active_keywords_str and active_keywords_str.strip():
             keyword_score, missed_keywords = compute_keyword_score(user_answer, active_keywords_str)
+            w_semantic = WEIGHTS["semantic"]
+            w_keyword  = WEIGHTS["keyword"]
         else:
+            # No keywords defined (e.g. behavioral/theoretical question) —
+            # redistribute keyword weight to semantic so the score stays fair
             keyword_score   = 0.0
             missed_keywords = []
+            w_semantic = WEIGHTS["semantic"] + WEIGHTS["keyword"]
+            w_keyword  = 0.0
 
         # ── Step 4: Completeness score against the best answer ────────────────────────
         comp = compute_completeness_score(
@@ -108,8 +114,8 @@ def compute_answer_quality_score(
 
         # ── Step 5: Weighted aggregate ────────────────────────────────────────────────
         answer_quality_score = round(
-            semantic_score     * WEIGHTS["semantic"]     +
-            keyword_score      * WEIGHTS["keyword"]      +
+            semantic_score     * w_semantic           +
+            keyword_score      * w_keyword            +
             completeness_score * WEIGHTS["completeness"],
             2,
         )

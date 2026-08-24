@@ -60,14 +60,21 @@ def update_or_create_weak_area(
     weak_area = get_weak_area_by_user_topic(db, user_id, topic)
     
     if weak_area:
-        # Update existing: recalculate averages and increment attempt count
-        weak_area.semantic_avg = semantic_avg
-        weak_area.keyword_avg = keyword_avg
-        weak_area.completeness_avg = completeness_avg
-        weak_area.confidence_avg = confidence_avg
-        weak_area.grammar_avg = grammar_avg
-        weak_area.attempt_count += attempt_count  # Cumulative
-        weak_area.last_updated = datetime.utcnow()
+        # Weighted running average — preserves historical sessions
+        old_n = weak_area.attempt_count or 0
+        new_n = attempt_count
+        total = old_n + new_n
+
+        def _wavg(old_val: float, new_val: float) -> float:
+            return round(((old_val or 0) * old_n + new_val * new_n) / total, 2) if total else new_val
+
+        weak_area.semantic_avg     = _wavg(weak_area.semantic_avg,     semantic_avg)
+        weak_area.keyword_avg      = _wavg(weak_area.keyword_avg,      keyword_avg)
+        weak_area.completeness_avg = _wavg(weak_area.completeness_avg, completeness_avg)
+        weak_area.confidence_avg   = _wavg(weak_area.confidence_avg,   confidence_avg)
+        weak_area.grammar_avg      = _wavg(weak_area.grammar_avg,      grammar_avg)
+        weak_area.attempt_count    = total
+        weak_area.last_updated     = datetime.utcnow()
     else:
         # Create new weak area record
         weak_area = UserWeakAreas(

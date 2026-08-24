@@ -1,4 +1,6 @@
+import json
 import random
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 from database.models import Questions
 from crud.question_history import increment_question_seen
@@ -31,6 +33,8 @@ def get_questions_for_session(
 
     # ── 1. Build candidate pool ──────────────────────────────────────────────
     candidates = _fetch_candidates(db, role, level, interview_type, difficulty_norm)
+    # Reject questions that have no scorable reference answer at all
+    candidates = [q for q in candidates if _has_reference_answer(q)]
 
     if not candidates:
         return []
@@ -52,6 +56,22 @@ def get_questions_for_session(
     return selected
 
 
+def _has_reference_answer(q: Questions) -> bool:
+    """True only if the question has at least one real reference answer to score against."""
+    if q.ideal_answer and q.ideal_answer.strip():
+        return True
+    if q.answers:
+        try:
+            ans = q.answers if isinstance(q.answers, dict) else json.loads(q.answers)
+            if ans.get("ideal", "") and str(ans["ideal"]).strip():
+                return True
+            if any(a and str(a).strip() for a in ans.get("alternatives", [])):
+                return True
+        except (ValueError, TypeError):
+            pass
+    return False
+
+
 def _fetch_candidates(db, role, level, interview_type, difficulty_norm):
     """
     Builds a candidate pool with progressive fallbacks:
@@ -65,7 +85,8 @@ def _fetch_candidates(db, role, level, interview_type, difficulty_norm):
         .filter(
             Questions.role == role,
             Questions.question_text.isnot(None),
-            Questions.ideal_answer.isnot(None),
+            # Accept questions that have an ideal answer OR at least alternatives
+            or_(Questions.ideal_answer.isnot(None), Questions.answers.isnot(None)),
             Questions.code_expected == False,
         )
     )
