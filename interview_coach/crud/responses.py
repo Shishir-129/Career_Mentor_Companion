@@ -133,6 +133,9 @@ def create_response_from_audio(
     if question and question.answers:
         try:
             ans_data = question.answers if isinstance(question.answers, dict) else json.loads(question.answers)
+            # Fallback: if ideal_answer column is empty, try answers.ideal
+            if not ideal_answer:
+                ideal_answer = ans_data.get("ideal", "") or ""
             alternatives = [a for a in ans_data.get("alternatives", []) if a and str(a).strip()]
         except (ValueError, TypeError):
             pass

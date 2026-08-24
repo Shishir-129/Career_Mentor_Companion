@@ -21,10 +21,10 @@ def _derive_strengths(d: dict) -> list[str]:
         strengths.append("Answer covered the key structural components.")
     if d["grammar_score"] >= 65:
         strengths.append("Clear and articulate language.")
-    if d["filler_count"] <= 1:
-        strengths.append("Confident delivery with minimal filler words.")
     if 120 <= d["speaking_speed"] <= 155:
         strengths.append("Excellent speaking pace (120-155 WPM).")
+    elif 100 <= d["speaking_speed"] < 120 or 155 < d["speaking_speed"] <= 175:
+        strengths.append("Comfortable speaking pace — easy for an interviewer to follow.")
     return strengths or ["Keep practising to build confidence and depth."]
 
 
@@ -87,9 +87,9 @@ def _build_narrative(
     if confidence_score >= 75:
         closing = "Your delivery was confident and clear — that composure will serve you well in real interviews."
     elif confidence_score >= 55:
-        closing = "Decent delivery. Work on reducing filler words to come across more polished."
+        closing = "Decent delivery. Aim for a steady pace and reduce hesitation pauses to come across more polished."
     else:
-        closing = "Focus on your delivery: aim for a steady 120-155 WPM pace and cut filler words like 'um' and 'uh'."
+        closing = "Focus on your delivery: target 120-155 WPM and try to minimise long pauses between thoughts."
 
     parts = [opening]
     if middle:
