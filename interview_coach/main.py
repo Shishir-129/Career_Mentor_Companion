@@ -5,9 +5,11 @@ from uuid import uuid4
 
 from fastapi import Depends, FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
 import whisper
+
 
 from crud.responses import create_response_from_audio
 from database.connection import Base, engine, get_db
@@ -54,8 +56,8 @@ app.add_middleware(
     allow_origins=[
         "http://localhost:5173",  # local
         "http://localhost:5174",  # local
-        "",  # deployed: set this to the deployed frontend URL
     ],
+    allow_origin_regex=r"https://.*\.ngrok(-free)?\.(app|dev)",  # ngrok tunnel URLs change per run
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -118,3 +120,15 @@ async def upload_and_store_transcript(
     except Exception as exc:
         log.exception("Error processing audio response")
         raise HTTPException(status_code=500, detail=f"{type(exc).__name__}: {str(exc)[:200]}")
+
+
+# Serves the built React app (frontend/dist) so backend + frontend share one origin/port for ngrok.
+FRONTEND_DIST = Path(__file__).resolve().parent.parent / "frontend" / "dist"
+
+if (FRONTEND_DIST / "index.html").exists():
+    @app.get("/{full_path:path}", include_in_schema=False)
+    async def serve_frontend(full_path: str):
+        candidate = (FRONTEND_DIST / full_path).resolve()
+        if candidate.is_file() and FRONTEND_DIST in candidate.parents:
+            return FileResponse(candidate)
+        return FileResponse(FRONTEND_DIST / "index.html")
