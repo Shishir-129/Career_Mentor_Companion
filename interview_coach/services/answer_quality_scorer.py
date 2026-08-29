@@ -127,6 +127,7 @@ def compute_answer_quality_score(
             ideal_answer=best_answer,   # use best matched answer, not always the ideal
             question_text=question_text,
             alternatives=None,          # already resolved the best match above
+            question_type=question_type,  # Pass question_type for STAR detection
         )
         completeness_score = comp["completeness_score"]
 
