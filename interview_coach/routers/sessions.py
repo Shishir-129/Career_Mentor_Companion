@@ -70,12 +70,17 @@ def get_user_sessions(user_id: int, db: Session = Depends(get_db)):
             # Calculate overall score
             overall_score = calculate_overall_score(scores)
             
+            # Derive answered/completed from actual response count to fix stale DB values
+            answered_count = len(responses)
+            answered_capped = min(answered_count, session.total_questions)
+            is_completed = session.completed or (answered_count >= session.total_questions)
+
             result.append({
                 'session_id': session.id,
                 'role': session.role,
-                'completed': session.completed,
+                'completed': is_completed,
                 'started_at': session.started_at,
-                'answered': session.answered,
+                'answered': answered_capped,
                 'total_questions': session.total_questions,
                 'overall_score': session.total_score or overall_score,
                 'scores': scores

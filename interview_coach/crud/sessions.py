@@ -47,10 +47,10 @@ def end_session(db: Session, session_id: int, data: SessionEnd):
         
         session.total_score = round(avg_quality * 0.70 + avg_confidence * 0.30, 2)
 
-    # Track answered questions count
-    session.answered = answered_count
-    # Mark as completed only if all 5 questions are answered
-    session.completed = (answered_count == 5)
+    # Track answered questions count — cap at total_questions to guard against duplicate submissions
+    session.answered = min(answered_count, session.total_questions)
+    # Mark as completed only if all questions are answered
+    session.completed = (answered_count >= session.total_questions)
 
     db.commit()
     db.refresh(session)

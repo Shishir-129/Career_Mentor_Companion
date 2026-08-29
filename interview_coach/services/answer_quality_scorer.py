@@ -96,11 +96,11 @@ def compute_answer_quality_score(
             w_keyword  = WEIGHTS["keyword"]
         else:
             # No keywords defined (e.g. behavioral/theoretical question) —
-            # redistribute keyword weight to semantic so the score stays fair
+            # For questions with no keywords: 80% semantic + 20% completeness
             keyword_score   = 0.0
             missed_keywords = []
-            w_semantic = WEIGHTS["semantic"] + WEIGHTS["keyword"]
-            w_keyword  = 0.0
+            w_semantic = 0.80  # 80% semantic
+            w_keyword  = 0.0   # 0% keyword
 
         # ── Step 4: Completeness score against the best answer ────────────────────────
         comp = compute_completeness_score(
@@ -116,7 +116,7 @@ def compute_answer_quality_score(
         answer_quality_score = round(
             semantic_score     * w_semantic           +
             keyword_score      * w_keyword            +
-            completeness_score * WEIGHTS["completeness"],
+            completeness_score * 0.20,  # 20% completeness
             2,
         )
 
