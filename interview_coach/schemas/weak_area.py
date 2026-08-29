@@ -32,6 +32,8 @@ class WeakAreaResponse(WeakAreaBase):
     id: int
     user_id: int
     last_updated: datetime
+    question_types: Optional[list[str]] = None  # e.g. ["behavioral", "technical"]
+    is_behavioral_only: Optional[bool] = False  # True if only behavioral questions for this topic
 
     class Config:
         from_attributes = True
