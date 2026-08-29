@@ -1,8 +1,7 @@
 import json
-import random
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
-from database.models import Questions
+from database.models import Questions, UserQuestionHistory, UserWeakAreas
 from crud.question_history import increment_question_seen
 
 # Difficulty adjacency — controls fallback ordering
@@ -22,16 +21,43 @@ def get_questions_for_session(
     Smart question selection pipeline:
       1. Filter by role + experience_level + question_type + difficulty (exact)
       2. Expand to adjacent difficulty levels if pool is too small
-      3. Apply greedy semantic diversity: each next question must be
+      3. Hard-exclude questions already seen by this user (uses UserQuestionHistory)
+      4. Boost priority for topics where the user has weak area scores
+      5. Apply greedy semantic diversity: each next question must be
          maximally different in meaning from the ones already chosen
-      4. Freshness bonus: deprioritize questions asked many times before
-      5. Track usage via times_asked so repeat questions are rare
+      6. Track usage via times_asked and user_question_history
     """
     level           = level.lower().strip()
     difficulty_norm = difficulty.lower().strip()
     interview_type  = interview_type.strip()
 
-    # ── 1. Build candidate pool ──────────────────────────────────────────────
+    # ── Load user-specific seen question ids ─────────────────────────────────
+    seen_records = (
+        db.query(UserQuestionHistory)
+        .filter(UserQuestionHistory.user_id == user_id)
+        .all()
+    )
+    seen_ids = {r.question_id for r in seen_records}
+
+    # ── Load user weak area topic scores ─────────────────────────────────────
+    weak_area_records = (
+        db.query(UserWeakAreas)
+        .filter(UserWeakAreas.user_id == user_id)
+        .all()
+    )
+    # Build map: topic (lowercase) → overall avg score
+    weak_topic_scores: dict[str, float] = {}
+    for wa in weak_area_records:
+        scores = [
+            wa.semantic_avg or 0,
+            wa.keyword_avg or 0,
+            wa.completeness_avg or 0,
+            wa.confidence_avg or 0,
+            wa.grammar_avg or 0,
+        ]
+        weak_topic_scores[wa.topic.lower()] = sum(scores) / len(scores)
+
+    # ── 1. Build candidate pool ───────────────────────────────────────────────
     candidates = _fetch_candidates(db, role, level, interview_type, difficulty_norm)
     # Reject questions that have no scorable reference answer at all
     candidates = [q for q in candidates if _has_reference_answer(q)]
@@ -39,17 +65,30 @@ def get_questions_for_session(
     if not candidates:
         return []
 
-    # ── 2. Select using semantic diversity ───────────────────────────────────
-    if len(candidates) <= count:
-        selected = candidates
+    # ── 2. Prefer unseen questions; fall back to seen only if pool is too small
+    unseen = [q for q in candidates if q.id not in seen_ids]
+    if len(unseen) >= count:
+        pool = unseen
+    elif unseen:
+        # Fill remaining slots from seen questions (least recently seen first)
+        seen_candidates = [q for q in candidates if q.id in seen_ids]
+        seen_candidates.sort(key=lambda q: next(
+            (r.last_seen for r in seen_records if r.question_id == q.id),
+            None
+        ) or __import__('datetime').datetime.min)
+        pool = unseen + seen_candidates
     else:
-        selected = _diverse_select(candidates, count, difficulty_norm)
+        pool = candidates  # no unseen at all — use everything
 
-    # ── 3. Increment times_asked so future sessions see fresh questions ───────
-    # AND track in user_question_history for user-specific analytics
+    # ── 3. Select using semantic diversity + weak area priority ───────────────
+    if len(pool) <= count:
+        selected = pool
+    else:
+        selected = _diverse_select(pool, count, difficulty_norm, weak_topic_scores)
+
+    # ── 4. Increment usage counters ───────────────────────────────────────────
     for q in selected:
         q.times_asked = (q.times_asked or 0) + 1
-        # Track this question as seen by this user
         increment_question_seen(db, user_id, q.id)
     db.commit()
 
@@ -85,15 +124,13 @@ def _fetch_candidates(db, role, level, interview_type, difficulty_norm):
         .filter(
             Questions.role == role,
             Questions.question_text.isnot(None),
-            # Accept questions that have an ideal answer OR at least alternatives
             or_(Questions.ideal_answer.isnot(None), Questions.answers.isnot(None)),
             Questions.code_expected == False,
         )
     )
 
-    # Adjacent difficulties (e.g. medium → [easy, medium, hard]; hard → [medium, hard])
     idx = _DIFFICULTY_ORDER.index(difficulty_norm) if difficulty_norm in _DIFFICULTY_ORDER else 1
-    adjacent = _DIFFICULTY_ORDER[max(0, idx - 1): idx + 2]  # up to 3 levels
+    adjacent = _DIFFICULTY_ORDER[max(0, idx - 1): idx + 2]
 
     # Pass 1: strict
     candidates = (
@@ -145,60 +182,70 @@ def _fetch_candidates(db, role, level, interview_type, difficulty_norm):
     )
 
 
-def _diverse_select(candidates: list, count: int, difficulty_norm: str) -> list:
+def _diverse_select(
+    candidates: list,
+    count: int,
+    difficulty_norm: str,
+    weak_topic_scores: dict[str, float],
+) -> list:
     """
     Greedy maximum-diversity selection using sentence-transformer embeddings.
 
     Priority score for seeding and tiebreaking:
-      - Exact difficulty match   → +0.20
-      - Verified question        → +0.10
-      - Never shown before       → +0.15  (times_asked == 0)
-      - Each prior showing       → -0.05  (up to -0.30)
+      - Exact difficulty match          → +0.20
+      - Never shown to this user before → +0.30  (unseen bonus — strong)
+      - Weak area topic match           → +0.10 to +0.25 (scaled by weakness)
+      - Each global prior showing       → -0.05  (up to -0.30)
 
     After seeding, each successive pick is the candidate with the highest
-    (semantic_diversity + priority_boost) score, ensuring the final set
-    covers different topics and concepts.
-
+    (semantic_diversity + priority_boost) score.
     Falls back to priority-sorted selection if the model is unavailable.
     """
+    def _priority(q: Questions) -> float:
+        score = 0.0
+        # Exact difficulty match bonus
+        if (q.difficulty or "").lower() == difficulty_norm:
+            score += 0.20
+        # Global freshness penalty
+        asked = q.times_asked or 0
+        score -= min(asked * 0.05, 0.30)
+        # Weak area topic boost — more weight for weaker topics
+        topic = (q.topic or "").lower()
+        if topic and topic in weak_topic_scores:
+            topic_score = weak_topic_scores[topic]
+            if topic_score < 50:
+                score += 0.25   # needs work
+            elif topic_score < 65:
+                score += 0.18   # below average
+            elif topic_score < 80:
+                score += 0.10   # average — slight boost
+        return score
+
     try:
         from services.semantic_score import get_model
         from sentence_transformers import util
 
-        model = get_model()  # already warm — zero reload cost
+        model = get_model()
         texts = [q.question_text or "" for q in candidates]
         embeddings = model.encode(
             texts, convert_to_tensor=True, show_progress_bar=False
         )
 
-        def _priority(i: int) -> float:
-            q = candidates[i]
-            score = 0.0
-            if (q.difficulty or "").lower() == difficulty_norm:
-                score += 0.20
-            asked = q.times_asked or 0
-            if asked == 0:
-                score += 0.15
-            else:
-                score -= min(asked * 0.05, 0.30)  # penalty caps at -0.30
-            return score
-
-        # Seed: highest priority question
-        seed = max(range(len(candidates)), key=_priority)
+        # Seed: highest priority candidate
+        seed = max(range(len(candidates)), key=lambda i: _priority(candidates[i]))
         selected = [seed]
 
-        while len(selected) < count:
+        while len(selected) < count and len(selected) < len(candidates):
             best_idx, best_score = -1, -1.0
             for i in range(len(candidates)):
                 if i in selected:
                     continue
-                # Semantic diversity: 1 - max similarity to any already-selected
                 sims = [
                     util.cos_sim(embeddings[i], embeddings[j]).item()
                     for j in selected
                 ]
                 diversity = 1.0 - max(sims)
-                score = diversity + _priority(i)
+                score = diversity + _priority(candidates[i])
                 if score > best_score:
                     best_score, best_idx = score, i
 
@@ -207,13 +254,6 @@ def _diverse_select(candidates: list, count: int, difficulty_norm: str) -> list:
         return [candidates[i] for i in selected]
 
     except Exception:
-        # Fallback: sort by priority (difficulty match + freshness) if model fails
-        def _fallback_priority(q):
-            score = 0
-            if (q.difficulty or "").lower() == difficulty_norm:
-                score += 3
-            score -= (q.times_asked or 0)
-            return -score  # negate for ascending sort
-
-        sorted_cands = sorted(candidates, key=_fallback_priority)
+        # Fallback: sort by priority if model fails
+        sorted_cands = sorted(candidates, key=lambda q: -_priority(q))
         return sorted_cands[:count]

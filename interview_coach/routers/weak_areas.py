@@ -10,8 +10,26 @@ from crud.weak_areas import (
     delete_weak_area
 )
 from database.connection import get_db
+from database.models import Responses
 
 router = APIRouter(prefix="/weak-areas", tags=["Weak Areas"])
+
+
+def _enrich_weak_area_with_question_types(db: Session, weak_area):
+    """Add question_types and is_behavioral_only to weak area response"""
+    responses = db.query(Responses).filter(
+        Responses.topic == weak_area.topic,
+        Responses.user_id == weak_area.user_id
+    ).all()
+    
+    question_types = list(set([r.question_type for r in responses if r.question_type]))
+    is_behavioral_only = len(question_types) == 1 and question_types[0] == "behavioral"
+    
+    # Convert to dict and add fields
+    result = weak_area.__dict__.copy()
+    result['question_types'] = question_types
+    result['is_behavioral_only'] = is_behavioral_only
+    return result
 
 
 @router.post("/", response_model=WeakAreaResponse)
@@ -21,7 +39,8 @@ def submit_weak_area(weak_area: WeakAreaCreate, db: Session = Depends(get_db)):
 
 @router.get("/user/{user_id}", response_model=list[WeakAreaResponse])
 def read_weak_areas_by_user(user_id: int, db: Session = Depends(get_db)):
-    return get_weak_areas_by_user(db, user_id)
+    weak_areas = get_weak_areas_by_user(db, user_id)
+    return [_enrich_weak_area_with_question_types(db, wa) for wa in weak_areas]
 
 
 @router.get("/{weak_area_id}", response_model=WeakAreaResponse)

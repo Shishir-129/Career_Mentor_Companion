@@ -184,6 +184,98 @@
     font-size: 0.9rem;
 }
 
+/* ── Tab bar ──────────────────────────────────────────────────────────────── */
+.wa-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    background: white;
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    padding: 0.5rem;
+}
+
+.wa-tab {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    padding: 0.4rem 0.9rem;
+    border-radius: 8px;
+    border: none;
+    background: transparent;
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: #6b7280;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+    white-space: nowrap;
+}
+
+.wa-tab:hover {
+    background: #f3f4f6;
+    color: #111827;
+}
+
+.wa-tab--active {
+    background: #111827;
+    color: #fff;
+}
+
+.wa-tab--active:hover {
+    background: #1f2937;
+    color: #fff;
+}
+
+.wa-tab-badge {
+    display: inline-block;
+    font-size: 0.7rem;
+    font-weight: 700;
+    color: #fff;
+    padding: 0.1rem 0.42rem;
+    border-radius: 99px;
+    line-height: 1.4;
+}
+
+/* ── Topic meta bar ───────────────────────────────────────────────────────── */
+.wa-topic-meta {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    padding: 0.65rem 1rem;
+    background: white;
+    border: 1px solid #e5e7eb;
+    border-radius: 10px;
+    font-size: 0.82rem;
+}
+
+.wa-topic-meta-label {
+    font-weight: 600;
+    color: #9ca3af;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    font-size: 0.72rem;
+}
+
+.wa-topic-meta-name {
+    font-weight: 700;
+    color: #111827;
+    font-size: 0.9rem;
+}
+
+.wa-topic-meta-sep {
+    color: #d1d5db;
+}
+
+.wa-topic-meta-attempts {
+    color: #6b7280;
+}
+
+.wa-topic-meta-role {
+    color: #6b7280;
+    font-style: italic;
+}
+
 /* Responsive */
 @media (max-width: 900px) {
     .wa-wrapper {

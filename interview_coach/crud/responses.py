@@ -147,6 +147,7 @@ def create_response_from_audio(
         duration_secs=audio_data["duration_secs"],
         pause_count=audio_data["pause_count"],
         question_text=q_text,
+        total_pause_secs=audio_data.get("total_pause_secs", 0.0),
     )
 
     # ── 4. Answer quality scoring (transcript vs best reference answer) ────────────
@@ -159,6 +160,7 @@ def create_response_from_audio(
         alternatives=alternatives,
         alternative_answer_keywords=alt_keywords,
         alternative_answer_components=alt_components,
+        question_type=question_type or "technical",
     )
 
     # ── 5. Generate feedback ──────────────────────────────────────────────────
@@ -177,6 +179,7 @@ def create_response_from_audio(
         filler_count=conf["filler_count"],
         pause_count=conf["pause_count"],
         transcript=transcript,
+        question_type=question_type or "technical",
     )
 
     # ── 6. Save response to database ─────────────────────────────────────────
