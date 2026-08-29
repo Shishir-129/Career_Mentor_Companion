@@ -1,5 +1,6 @@
 from sqlalchemy.orm import Session
 from pwdlib import PasswordHash
+from pwdlib import exceptions as pwdlib_exceptions
 
 from database.models import User
 from schemas.user import UserCreate
@@ -54,6 +55,9 @@ def authenticate_user(db: Session, email: str, password: str):
     user = get_user_by_email(db, email)
     if not user:
         return None
-    if not password_hash.verify(password, user.password):
+    try:
+        if not password_hash.verify(password, user.password):
+            return None
+    except pwdlib_exceptions.UnknownHashError:
         return None
     return user

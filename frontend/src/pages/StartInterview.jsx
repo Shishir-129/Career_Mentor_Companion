@@ -27,6 +27,7 @@ export default function StartInterview() {
 
     const [liveTranscript, setLiveTranscript] = useState("");
     const [finalTranscript, setFinalTranscript] = useState("");
+    const [speechSupported, setSpeechSupported] = useState(true); // false when browser blocks Web Speech API
     const recognitionRef = useRef(null);
     const mediaRecorderRef = useRef(null);
     const chunksRef = useRef([]);
@@ -158,7 +159,10 @@ export default function StartInterview() {
         }
 
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-        if (!SpeechRecognition) return;
+        if (!SpeechRecognition) {
+            setSpeechSupported(false);
+            return;
+        }
         const recognition = new SpeechRecognition();
         recognition.lang = "en-US";
         recognition.continuous = true;
@@ -175,7 +179,17 @@ export default function StartInterview() {
             setFinalTranscript(prev => prev + final);
             setLiveTranscript(interim);
         };
-        recognition.start();
+        recognition.onerror = (e) => {
+            // 'not-allowed' or 'service-not-allowed' means the browser blocked the API
+            if (e.error === "not-allowed" || e.error === "service-not-allowed") {
+                setSpeechSupported(false);
+            }
+        };
+        try {
+            recognition.start();
+        } catch {
+            setSpeechSupported(false);
+        }
     };
 
     const stopRecording = () => {
@@ -386,26 +400,39 @@ export default function StartInterview() {
                                     <span className="si-transcript-final">{finalTranscript}</span>
                                     <span className="si-transcript-interim">{liveTranscript}</span>
                                   </>
-                                : <span className="si-transcript-placeholder">
-                                    Your transcribed answer will appear here as you speak...
-                                  </span>
+                                : speechSupported
+                                    ? <span className="si-transcript-placeholder">
+                                        Your transcribed answer will appear here as you speak...
+                                      </span>
+                                    : <span className="si-transcript-placeholder si-transcript-unsupported">
+                                        ⚠️ Live preview unavailable — your browser has blocked the Speech API (common in Brave). Your audio is still recorded and will be transcribed after you submit.
+                                      </span>
                             }
                         </div>
 
-                        {/* Playback */}
-                        {audioURL && !recording && (
+                        {/* After recording: show options OR feedback — never both */}
+                        {audioURL && !recording && !feedback && (
                             <div className="si-playback">
                                 <audio controls src={audioURL} />
-                                <div className="si-playback-actions">
-                                    <button className="si-btn-secondary" onClick={startRecording}>🔁 Re-record</button>
-                                    <button className="si-btn-primary" onClick={submitAnswer} disabled={submitting}>
-                                        {submitting ? "⏳ Analysing..." : "✅ Submit Answer"}
-                                    </button>
-                                </div>
+                                {submitting ? (
+                                    <div className="si-submitting-state">
+                                        <span className="si-submitting-spinner" />
+                                        <span>⏳ Analysing your answer…</span>
+                                    </div>
+                                ) : (
+                                    <div className="si-choice-row">
+                                        <button className="si-choice-btn si-choice-rerecord" onClick={startRecording}>
+                                            🔁 Re-record
+                                        </button>
+                                        <button className="si-choice-btn si-choice-submit" onClick={submitAnswer}>
+                                            ✅ Submit Answer
+                                        </button>
+                                    </div>
+                                )}
                             </div>
                         )}
 
-                        {/* Feedback */}
+                        {/* Feedback — shown only after submit, no re-submit here */}
                         {feedback && (
                             <div className="si-feedback">
                                 <h3>📊 Feedback</h3>

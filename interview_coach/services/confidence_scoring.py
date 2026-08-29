@@ -142,19 +142,35 @@ def _filler_score(filler_count: int, word_count: int) -> float:
     return 0.1                      # >10: very poor
 
 
-def _pause_score(pause_count: int, duration_secs: float) -> float:
+def _pause_score(pause_count: int, duration_secs: float, total_pause_secs: float = 0.0) -> float:
     """
-    Rate-based (pauses per minute) so longer answers aren't
-    unfairly penalised. Neutral score when no audio is available.
+    Two-check scoring — final score is the worse of Q1 and Q2.
+
+    Q1 (frequency): pauses per minute — catches too-many short pauses
+    Q2 (ratio):     total silence / total duration — catches one long freeze
+
+    Pause threshold (≥1s) is unchanged — only scoring is improved.
     """
     if duration_secs <= 0:
         return 0.5
+
+    # Q1 — frequency check
     rate = pause_count / (duration_secs / 60.0)
-    if rate <= 3:  return 1.0    # ≤3/min: natural
-    if rate <= 6:  return 0.75   # 3–6/min: acceptable
-    if rate <= 10: return 0.5    # 6–10/min: fair
-    if rate <= 15: return 0.25   # 10–15/min: poor
-    return 0.1                    # >15/min: very poor
+    if rate <= 3:    q1 = 1.0
+    elif rate <= 6:  q1 = 0.75
+    elif rate <= 10: q1 = 0.50
+    elif rate <= 15: q1 = 0.25
+    else:            q1 = 0.10
+
+    # Q2 — total silence ratio check
+    ratio = total_pause_secs / duration_secs
+    if ratio <= 0.05:   q2 = 1.0
+    elif ratio <= 0.15: q2 = 0.75
+    elif ratio <= 0.30: q2 = 0.50
+    elif ratio <= 0.50: q2 = 0.25
+    else:               q2 = 0.10
+
+    return min(q1, q2)  # penalise on whichever is worse
 
 
 def _count_fillers(tokens: list[str], text_lower: str) -> int:
@@ -166,12 +182,13 @@ def _count_fillers(tokens: list[str], text_lower: str) -> int:
 
 def analyze_audio(audio_path: str) -> dict:
     """
-    Librosa-only analysis: extracts duration and hesitation pause count.
-    Designed to run in parallel with Whisper since both only need the audio
-    file and are completely independent of each other.
+    Librosa-only analysis: extracts duration, hesitation pause count,
+    and total pause duration in seconds.
+    Pause threshold (≥1s) is unchanged.
     """
-    duration_secs = 0.0
-    pause_count   = 0
+    duration_secs    = 0.0
+    pause_count      = 0
+    total_pause_secs = 0.0
     try:
         y, sr = librosa.load(audio_path, sr=16000, mono=True)
         duration_secs = len(y) / sr if sr else 0.0
@@ -179,22 +196,29 @@ def analyze_audio(audio_path: str) -> dict:
             intervals = librosa.effects.split(y, top_db=30)
             for i in range(1, len(intervals)):
                 gap_secs = (intervals[i][0] - intervals[i - 1][1]) / sr
-                if gap_secs >= 1.0:   # only genuine hesitation pauses (>1s)
-                    pause_count += 1
+                if gap_secs >= 1.0:        # only genuine hesitation pauses (>1s)
+                    pause_count      += 1
+                    total_pause_secs += gap_secs   # accumulate actual silence duration
     except Exception:
         pass
-    return {"duration_secs": duration_secs, "pause_count": pause_count}
+    return {
+        "duration_secs":    duration_secs,
+        "pause_count":      pause_count,
+        "total_pause_secs": total_pause_secs,
+    }
 
 
 def compute_delivery_scores(
-    transcript:    str,
-    duration_secs: float,
-    pause_count:   int,
-    question_text: str = "",
+    transcript:       str,
+    duration_secs:    float,
+    pause_count:      int,
+    question_text:    str   = "",
+    total_pause_secs: float = 0.0,
 ) -> dict:
     """
     Computes all delivery scores from transcript text + pre-computed audio data.
     question_text is used to detect question-parroting in the grammar/substance score.
+    total_pause_secs is the sum of all silence gap durations from analyze_audio().
     Call this after both Whisper and analyze_audio() have completed.
     """
     transcript = (transcript or "").strip()
@@ -217,7 +241,7 @@ def compute_delivery_scores(
     grammar_s = _grammar_score(transcript, question_text)
     pace_s    = _pace_score(wpm)
     filler_s  = _filler_score(filler_count, word_count)
-    pause_s   = _pause_score(pause_count, duration_secs)
+    pause_s   = _pause_score(pause_count, duration_secs, total_pause_secs)
 
     raw = (
         grammar_s * WEIGHTS["grammar"] +

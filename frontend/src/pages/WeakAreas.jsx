@@ -6,7 +6,6 @@ import { useNavigate } from "react-router-dom";
 import "./WeakAreas.css";
 import { BASE_URL, getUserId } from "../api/config";
 
-// Each scoring dimension: what it measures and what to do when it's low
 const DIMENSIONS = [
     {
         key: "semantic_avg",
@@ -67,56 +66,106 @@ function getScoreColor(score) {
     return { color: "#22c55e", bg: "#f0fdf4", border: "#bbf7d0", label: "Good" };
 }
 
+/** Compute a simple average of all 5 dimensions for a single topic row */
+function topicOverallScore(wa) {
+    const vals = [wa.semantic_avg, wa.keyword_avg, wa.completeness_avg, wa.confidence_avg, wa.grammar_avg];
+    return Math.round(vals.reduce((s, v) => s + (v || 0), 0) / vals.length);
+}
+
+/** Aggregate across all topic rows (unweighted avg per dimension) */
+function buildOverall(weakAreas) {
+    if (!weakAreas.length) return null;
+    const n = weakAreas.length;
+    return {
+        semantic_avg:     Math.round(weakAreas.reduce((s, wa) => s + (wa.semantic_avg     || 0), 0) / n),
+        keyword_avg:      Math.round(weakAreas.reduce((s, wa) => s + (wa.keyword_avg      || 0), 0) / n),
+        completeness_avg: Math.round(weakAreas.reduce((s, wa) => s + (wa.completeness_avg || 0), 0) / n),
+        confidence_avg:   Math.round(weakAreas.reduce((s, wa) => s + (wa.confidence_avg   || 0), 0) / n),
+        grammar_avg:      Math.round(weakAreas.reduce((s, wa) => s + (wa.grammar_avg      || 0), 0) / n),
+    };
+}
+
+/** Render a sorted list of 5 dimension cards for a given scores object */
+function DimensionList({ scores }) {
+    const [expanded, setExpanded] = useState(null);
+
+    const sorted = [...DIMENSIONS].sort((a, b) => (scores[a.key] || 0) - (scores[b.key] || 0));
+
+    return (
+        <div className="wa-list">
+            {sorted.map(dim => {
+                const score = Math.round((scores[dim.key] || 0) * 100) / 100;
+                const style = getScoreColor(score);
+                const isOpen = expanded === dim.key;
+
+                return (
+                    <div
+                        key={dim.key}
+                        className="wa-card"
+                        style={{ borderColor: score < 65 ? style.border : "#e5e7eb" }}
+                    >
+                        <div className="wa-card-top" onClick={() => setExpanded(isOpen ? null : dim.key)}>
+                            <div className="wa-card-left">
+                                <div className="wa-label-row">
+                                    <span className="wa-dim-label">{dim.label}</span>
+                                    <span
+                                        className="wa-status-badge"
+                                        style={{ color: style.color, background: style.bg, border: `1px solid ${style.border}` }}
+                                    >
+                                        {style.label}
+                                    </span>
+                                </div>
+                                <p className="wa-dim-desc">{dim.desc}</p>
+                                <div className="wa-bar-wrap">
+                                    <div className="wa-bar">
+                                        <div
+                                            className="wa-bar-fill"
+                                            style={{ width: `${score}%`, background: style.color }}
+                                        />
+                                    </div>
+                                    <span className="wa-bar-label">{score}/100</span>
+                                </div>
+                            </div>
+                            <div className="wa-score-badge" style={{ color: style.color }}>
+                                {score}
+                            </div>
+                        </div>
+
+                        {isOpen && (
+                            <div className="wa-advice">
+                                <p className="wa-advice-title">How to improve:</p>
+                                <ul>
+                                    {dim.advice.map((tip, i) => (
+                                        <li key={i}>{tip}</li>
+                                    ))}
+                                </ul>
+                            </div>
+                        )}
+                    </div>
+                );
+            })}
+        </div>
+    );
+}
+
 export default function WeakAreas() {
     const navigate = useNavigate();
-    const [scores, setScores] = useState(null); // averaged scores across completed sessions
+    const [weakAreas, setWeakAreas] = useState([]);   // raw rows from user_weak_areas
     const [sessionCount, setSessionCount] = useState(0);
     const [loading, setLoading] = useState(true);
-    const [expanded, setExpanded] = useState(null);
+    const [activeTab, setActiveTab] = useState("overall");
     const userId = getUserId();
 
     useEffect(() => { fetchData(); }, []);
 
     const fetchData = async () => {
         try {
-            // ✅ Fetch pre-calculated weak areas by topic from backend
-            const weakAreasRes = await axios.get(`${BASE_URL}/weak-areas/user/${userId}`);
-            const weakAreas = weakAreasRes.data;
-            
-            // Get session count for display
-            const sessionsRes = await axios.get(`${BASE_URL}/sessions/user/${userId}/history`);
-            const sessionCount = sessionsRes.data.filter(s => s.completed).length;
-            setSessionCount(sessionCount);
-
-            if (weakAreas.length === 0) {
-                setScores(null);
-                return;
-            }
-
-            // Aggregate scores across all topics to show global skill breakdown
-            const aggregateScores = (weakAreas) => {
-                if (!weakAreas.length) return null;
-                
-                return {
-                    semantic_avg: Math.round(
-                        weakAreas.reduce((sum, wa) => sum + (wa.semantic_avg || 0), 0) / weakAreas.length
-                    ),
-                    keyword_avg: Math.round(
-                        weakAreas.reduce((sum, wa) => sum + (wa.keyword_avg || 0), 0) / weakAreas.length
-                    ),
-                    completeness_avg: Math.round(
-                        weakAreas.reduce((sum, wa) => sum + (wa.completeness_avg || 0), 0) / weakAreas.length
-                    ),
-                    confidence_avg: Math.round(
-                        weakAreas.reduce((sum, wa) => sum + (wa.confidence_avg || 0), 0) / weakAreas.length
-                    ),
-                    grammar_avg: Math.round(
-                        weakAreas.reduce((sum, wa) => sum + (wa.grammar_avg || 0), 0) / weakAreas.length
-                    ),
-                };
-            };
-
-            setScores(aggregateScores(weakAreas));
+            const [waRes, sessRes] = await Promise.all([
+                axios.get(`${BASE_URL}/weak-areas/user/${userId}`),
+                axios.get(`${BASE_URL}/sessions/user/${userId}/history`),
+            ]);
+            setWeakAreas(waRes.data);
+            setSessionCount(sessRes.data.filter(s => s.completed).length);
         } catch (err) {
             console.error(err);
         } finally {
@@ -124,17 +173,19 @@ export default function WeakAreas() {
         }
     };
 
-    // Sort: weakest first
-    const sorted = scores
-        ? [...DIMENSIONS].sort((a, b) => (scores[a.key] || 0) - (scores[b.key] || 0))
-        : DIMENSIONS;
-
     if (loading) return (
         <div className="app-layout">
             <Sidebar />
             <div className="wa-wrapper wa-center"><p className="loading-text">⏳ Analysing your scores…</p></div>
         </div>
     );
+
+    const overallScores = buildOverall(weakAreas);
+
+    // Active topic row (null when "overall" tab selected)
+    const activeTopicRow = activeTab === "overall"
+        ? null
+        : weakAreas.find(wa => wa.topic === activeTab);
 
     return (
         <div className="app-layout">
@@ -161,64 +212,64 @@ export default function WeakAreas() {
                     <div className="wa-empty">
                         <p>No completed sessions yet. Your skill breakdown will appear here after your first interview.</p>
                     </div>
-                ) : !scores ? (
+                ) : !overallScores ? (
                     <div className="wa-empty">
                         <p>Skill data is being processed. Complete a full interview session (all 5 questions) to see your breakdown.</p>
                     </div>
                 ) : (
-                    <div className="wa-list">
-                        {sorted.map(dim => {
-                            const score = scores[dim.key] || 0;
-                            const style = getScoreColor(score);
-                            const isOpen = expanded === dim.key;
+                    <>
+                        {/* ── Tab bar ── */}
+                        <div className="wa-tabs">
+                            <button
+                                className={`wa-tab ${activeTab === "overall" ? "wa-tab--active" : ""}`}
+                                onClick={() => setActiveTab("overall")}
+                            >
+                                Overall
+                            </button>
+                            {weakAreas.map(wa => {
+                                const ovr = topicOverallScore(wa);
+                                const style = getScoreColor(ovr);
+                                return (
+                                    <button
+                                        key={wa.topic}
+                                        className={`wa-tab ${activeTab === wa.topic ? "wa-tab--active" : ""}`}
+                                        onClick={() => setActiveTab(wa.topic)}
+                                    >
+                                        {wa.topic}
+                                        <span
+                                            className="wa-tab-badge"
+                                            style={{ background: style.color }}
+                                        >
+                                            {ovr}
+                                        </span>
+                                    </button>
+                                );
+                            })}
+                        </div>
 
-                            return (
-                                <div
-                                    key={dim.key}
-                                    className="wa-card"
-                                    style={{ borderColor: score < 65 ? style.border : "#e5e7eb" }}
-                                >
-                                    <div className="wa-card-top" onClick={() => setExpanded(isOpen ? null : dim.key)}>
-                                        <div className="wa-card-left">
-                                            <div className="wa-label-row">
-                                                <span className="wa-dim-label">{dim.label}</span>
-                                                <span
-                                                    className="wa-status-badge"
-                                                    style={{ color: style.color, background: style.bg, border: `1px solid ${style.border}` }}
-                                                >
-                                                    {style.label}
-                                                </span>
-                                            </div>
-                                            <p className="wa-dim-desc">{dim.desc}</p>
-                                            <div className="wa-bar-wrap">
-                                                <div className="wa-bar">
-                                                    <div
-                                                        className="wa-bar-fill"
-                                                        style={{ width: `${score}%`, background: style.color }}
-                                                    />
-                                                </div>
-                                                <span className="wa-bar-label">{score}/100</span>
-                                            </div>
-                                        </div>
-                                        <div className="wa-score-badge" style={{ color: style.color }}>
-                                            {score}
-                                        </div>
-                                    </div>
+                        {/* ── Topic meta (shown when a topic tab is active) ── */}
+                        {activeTopicRow && (
+                            <div className="wa-topic-meta">
+                                <span className="wa-topic-meta-label">Topic</span>
+                                <span className="wa-topic-meta-name">{activeTopicRow.topic}</span>
+                                <span className="wa-topic-meta-sep">·</span>
+                                <span className="wa-topic-meta-attempts">
+                                    {activeTopicRow.attempt_count} question{activeTopicRow.attempt_count !== 1 ? "s" : ""} attempted
+                                </span>
+                                {activeTopicRow.role && (
+                                    <>
+                                        <span className="wa-topic-meta-sep">·</span>
+                                        <span className="wa-topic-meta-role">{activeTopicRow.role}</span>
+                                    </>
+                                )}
+                            </div>
+                        )}
 
-                                    {isOpen && (
-                                        <div className="wa-advice">
-                                            <p className="wa-advice-title">How to improve:</p>
-                                            <ul>
-                                                {dim.advice.map((tip, i) => (
-                                                    <li key={i}>{tip}</li>
-                                                ))}
-                                            </ul>
-                                        </div>
-                                    )}
-                                </div>
-                            );
-                        })}
-                    </div>
+                        {/* ── Dimension cards ── */}
+                        <DimensionList
+                            scores={activeTab === "overall" ? overallScores : activeTopicRow}
+                        />
+                    </>
                 )}
             </div>
         </div>

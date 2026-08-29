@@ -147,6 +147,7 @@ def create_response_from_audio(
         duration_secs=audio_data["duration_secs"],
         pause_count=audio_data["pause_count"],
         question_text=q_text,
+        total_pause_secs=audio_data.get("total_pause_secs", 0.0),
     )
 
     # ── 4. Answer quality scoring (transcript vs best reference answer) ────────────
