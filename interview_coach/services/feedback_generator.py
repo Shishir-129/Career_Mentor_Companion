@@ -28,12 +28,13 @@ def _derive_strengths(d: dict) -> list[str]:
     return strengths or ["Keep practising to build confidence and depth."]
 
 
-def _derive_improvements(d: dict) -> list[str]:
+def _derive_improvements(d: dict, question_type: str = "technical") -> list[str]:
     # coaching_tips are already the human-readable form of components_missing
     # (e.g. "Try opening with a clear definition.") — don't add components_missing
     # separately as it would repeat the same information in a different format.
     improvements = list(d["coaching_tips"])
-    if d["missed_keywords"]:
+    # For behavioral questions, skip keyword suggestions — STAR structure feedback is sufficient
+    if d["missed_keywords"] and question_type.lower() != "behavioral":
         kws = ", ".join(d["missed_keywords"])
         improvements.append(f"Include these technical terms in your answer: {kws}.")
     return improvements
@@ -48,34 +49,55 @@ def _build_narrative(
     strengths: list[str],
     improvements: list[str],
     word_count: int = 0,
+    question_type: str = "technical",
 ) -> str:
+    is_behavioral = question_type.lower() == "behavioral"
+
     # ── Opening: overall answer quality ──────────────────────────────────────
-    if answer_quality_score >= 80:
-        opening = "Strong answer — you demonstrated a solid, well-rounded understanding of the topic."
-    elif answer_quality_score >= 65:
-        opening = "Good response overall. You covered the core concept effectively."
-    elif answer_quality_score >= 45:
-        opening = "Your answer shows a basic understanding, but needs more depth and structure to stand out."
+    if is_behavioral:
+        if answer_quality_score >= 80:
+            opening = "Strong answer — you told a clear, well-structured story."
+        elif answer_quality_score >= 65:
+            opening = "Good response. Your story covered most of the key elements."
+        elif answer_quality_score >= 45:
+            opening = "Your answer has potential but needs a clearer story structure (Situation → Task → Action → Result)."
+        else:
+            opening = "Focus on structuring your answer: describe the Situation, your Task, the Action you took, and the Result."
     else:
-        opening = "This answer needs significant work. Focus on explaining concepts clearly with supporting examples."
+        if answer_quality_score >= 80:
+            opening = "Strong answer — you demonstrated a solid, well-rounded understanding of the topic."
+        elif answer_quality_score >= 65:
+            opening = "Good response overall. You covered the core concept effectively."
+        elif answer_quality_score >= 45:
+            opening = "Your answer shows a basic understanding, but needs more depth and structure to stand out."
+        else:
+            opening = "This answer needs significant work. Focus on explaining concepts clearly with supporting examples."
 
     # Flag if the answer was too brief
     if 0 < word_count < 25:
         opening += " Your answer was quite brief — interviewers generally expect more elaboration."
 
     # ── Middle: diagnostic observation specific to the score profile ──────────
-    if semantic_score >= 75 and keyword_score >= 65:
-        middle = "You showed both conceptual clarity and good use of technical terms."
-    elif semantic_score >= 65 and keyword_score < 50:
-        middle = "You understood the concept well, but missed several key technical terms that interviewers specifically listen for."
-    elif semantic_score < 50 and keyword_score >= 65:
-        middle = "You used the right terminology, but the core explanation drifted from what was being asked."
-    elif completeness_score < 50:
-        middle = "The answer touched on the topic but was missing important structural elements — a definition or a concrete example would strengthen it considerably."
-    elif strengths:
-        middle = strengths[0]
+    if is_behavioral:
+        if completeness_score >= 75:
+            middle = "Your answer had a clear structure — the interviewer could follow your story easily."
+        elif completeness_score >= 50:
+            middle = "Good attempt, but try to be more explicit about the outcome or result of your action."
+        else:
+            middle = "Structure your answer using the STAR method: Situation, Task, Action, Result."
     else:
-        middle = ""
+        if semantic_score >= 75 and keyword_score >= 65:
+            middle = "You showed both conceptual clarity and good use of technical terms."
+        elif semantic_score >= 65 and keyword_score < 50:
+            middle = "You understood the concept well, but missed several key technical terms that interviewers specifically listen for."
+        elif semantic_score < 50 and keyword_score >= 65:
+            middle = "You used the right terminology, but the core explanation drifted from what was being asked."
+        elif completeness_score < 50:
+            middle = "The answer touched on the topic but was missing important structural elements — a definition or a concrete example would strengthen it considerably."
+        elif strengths:
+            middle = strengths[0]
+        else:
+            middle = ""
 
     # ── Improvement: most actionable next step ────────────────────────────────
     if improvements:
@@ -114,6 +136,7 @@ def generate_feedback(
     filler_count: int,
     pause_count: int,
     transcript: str = "",
+    question_type: str = "technical",
 ) -> dict:
     strengths = _derive_strengths(
         {
@@ -129,7 +152,8 @@ def generate_feedback(
         {
             "coaching_tips":   coaching_tips,
             "missed_keywords": missed_keywords,
-        }
+        },
+        question_type=question_type,
     )
 
     word_count = len(transcript.split()) if transcript.strip() else 0
@@ -143,6 +167,7 @@ def generate_feedback(
         strengths=strengths,
         word_count=word_count,
         improvements=improvements,
+        question_type=question_type,
     )
     return {
         "answer_quality_score": answer_quality_score,

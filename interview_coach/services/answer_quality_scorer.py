@@ -35,6 +35,7 @@ def compute_answer_quality_score(
     alternatives: list[str] | None = None,
     alternative_answer_keywords: dict | None = None,
     alternative_answer_components: dict | None = None,
+    question_type: str = "technical",
 ) -> dict:
     """
     Aggregates three sub-scores into a single Answer Quality Score.
@@ -44,9 +45,14 @@ def compute_answer_quality_score(
     2. Keyword + completeness scoring use THAT answer's keywords/components — not always
        the ideal's — so the user is graded fairly against the style they actually matched.
 
-    answer_quality_score = (semantic × 0.50)
-                         + (keyword  × 0.30)
-                         + (completeness × 0.20)
+    For Technical Questions (default):
+        answer_quality_score = (semantic × 0.50)
+                             + (keyword  × 0.30)
+                             + (completeness × 0.20)
+
+    For Behavioral Questions:
+        answer_quality_score = completeness × 1.0
+        (STAR structure only — semantic & keyword both disabled)
 
     Returns:
         answer_quality_score  — float 0–100
@@ -90,17 +96,29 @@ def compute_answer_quality_score(
             active_components_json = json.dumps(alt_comp_list) if alt_comp_list else expected_components_json
 
         # ── Step 3: Keyword score against the best answer's keywords ──────────────────
-        if active_keywords_str and active_keywords_str.strip():
+        is_behavioral = question_type.lower().strip() == "behavioral"
+        
+        if active_keywords_str and active_keywords_str.strip() and not is_behavioral:
             keyword_score, missed_keywords = compute_keyword_score(user_answer, active_keywords_str)
             w_semantic = WEIGHTS["semantic"]
             w_keyword  = WEIGHTS["keyword"]
+            w_completeness = WEIGHTS["completeness"]
+        elif is_behavioral:
+            # Behavioral: 100% completeness (STAR structure)
+            # Personal stories shouldn't be compared to an ideal answer semantically
+            keyword_score   = 0.0
+            missed_keywords = []
+            w_semantic     = 0.0   # 0% — irrelevant for personal stories
+            w_keyword      = 0.0   # 0% — no keyword matching for behavioral
+            w_completeness = 1.0   # 100% — STAR structure is the only answer signal
         else:
-            # No keywords defined (e.g. behavioral/theoretical question) —
+            # No keywords defined (e.g. theoretical question) —
             # For questions with no keywords: 80% semantic + 20% completeness
             keyword_score   = 0.0
             missed_keywords = []
-            w_semantic = 0.80  # 80% semantic
-            w_keyword  = 0.0   # 0% keyword
+            w_semantic = 0.80      # 80% semantic
+            w_keyword  = 0.0       # 0% keyword
+            w_completeness = 0.20  # 20% completeness
 
         # ── Step 4: Completeness score against the best answer ────────────────────────
         comp = compute_completeness_score(
@@ -116,7 +134,7 @@ def compute_answer_quality_score(
         answer_quality_score = round(
             semantic_score     * w_semantic           +
             keyword_score      * w_keyword            +
-            completeness_score * 0.20,  # 20% completeness
+            completeness_score * w_completeness,
             2,
         )
 

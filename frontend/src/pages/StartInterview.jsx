@@ -447,8 +447,12 @@ export default function StartInterview() {
                                 <details className="si-score-details">
                                     <summary>📈 Answer Quality Breakdown</summary>
                                     <div className="si-score-grid">
-                                        <ScoreBox label="Semantic" value={feedback.semantic_score} />
-                                        <ScoreBox label="Keywords" value={feedback.keyword_score} />
+                                        {feedback.question_type?.toLowerCase() !== "behavioral" && (
+                                            <ScoreBox label="Semantic" value={feedback.semantic_score} />
+                                        )}
+                                        {feedback.question_type?.toLowerCase() !== "behavioral" && (
+                                            <ScoreBox label="Keywords" value={feedback.keyword_score} />
+                                        )}
                                         <ScoreBox label="Completeness" value={feedback.completeness_score} />
                                     </div>
                                 </details>

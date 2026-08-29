@@ -23,14 +23,29 @@ def calculate_average(values):
     return round(mean(valid_values), 2) if valid_values else 0
 
 
-def calculate_overall_score(scores_dict):
-    """Overall = Answer Quality (70%) + Confidence (30%).
-    answer_quality already aggregates semantic, keyword and completeness,
-    so there is no need to include them separately.
+def calculate_overall_score(scores_dict, interview_type: str = "technical"):
+    """
+    Calculate overall interview score based on interview type.
+    
+    For Technical Questions:
+        Overall = Answer Quality (70%) + Confidence (30%)
+        answer_quality already aggregates semantic, keyword and completeness
+    
+    For Behavioral Questions:
+        Overall = Confidence (70%) + Answer Quality (30%)
+        Delivery and storytelling matter more than content precision
     """
     quality    = scores_dict.get('answer_quality_avg', 0) or 0
     confidence = scores_dict.get('confidence_avg', 0) or 0
-    return round(quality * 0.70 + confidence * 0.30, 2)
+    
+    is_behavioral = interview_type.lower().strip() == "behavioral"
+    
+    if is_behavioral:
+        # Behavioral: confidence-first (70% confidence, 30% answer quality)
+        return round(confidence * 0.70 + quality * 0.30, 2)
+    else:
+        # Technical: quality-first (70% answer quality, 30% confidence)
+        return round(quality * 0.70 + confidence * 0.30, 2)
 
 
 @router.post("/", response_model=SessionResponse)
@@ -67,8 +82,10 @@ def get_user_sessions(user_id: int, db: Session = Depends(get_db)):
                 'grammar_avg': calculate_average([r.grammar_score for r in responses]),
             }
             
-            # Calculate overall score
-            overall_score = calculate_overall_score(scores)
+            # Calculate overall score using question_type from responses (if available)
+            # For consistency, use the first response's question_type or default to "technical"
+            interview_type = responses[0].question_type if responses and responses[0].question_type else "technical"
+            overall_score = calculate_overall_score(scores, interview_type)
             
             # Derive answered/completed from actual response count to fix stale DB values
             answered_count = len(responses)

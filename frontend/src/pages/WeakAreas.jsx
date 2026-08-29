@@ -16,6 +16,7 @@ const DIMENSIONS = [
             "Practise explaining topics in your own words without notes.",
             "After answering, compare your explanation to a reference and note the gaps.",
         ],
+        behavioralExclude: true,  // Hide for behavioral-only topics
     },
     {
         key: "keyword_avg",
@@ -26,6 +27,7 @@ const DIMENSIONS = [
             "Use exact terms — e.g. 'gradient descent' not 'the training process'.",
             "After each session, note which keywords you missed and practise using them.",
         ],
+        behavioralExclude: true,  // Hide for behavioral-only topics
     },
     {
         key: "completeness_avg",
@@ -66,30 +68,56 @@ function getScoreColor(score) {
     return { color: "#22c55e", bg: "#f0fdf4", border: "#bbf7d0", label: "Good" };
 }
 
-/** Compute a simple average of all 5 dimensions for a single topic row */
+/** Compute a simple average of relevant dimensions for a single topic row */
 function topicOverallScore(wa) {
-    const vals = [wa.semantic_avg, wa.keyword_avg, wa.completeness_avg, wa.confidence_avg, wa.grammar_avg];
+    const isBehavioral = wa.is_behavioral_only;
+    let vals = [wa.semantic_avg, wa.keyword_avg, wa.completeness_avg, wa.confidence_avg, wa.grammar_avg];
+    
+    // For behavioral-only topics, exclude semantic and keyword
+    if (isBehavioral) {
+        vals = [wa.completeness_avg, wa.confidence_avg, wa.grammar_avg];
+    }
+    
     return Math.round(vals.reduce((s, v) => s + (v || 0), 0) / vals.length);
 }
 
 /** Aggregate across all topic rows (unweighted avg per dimension) */
 function buildOverall(weakAreas) {
     if (!weakAreas.length) return null;
-    const n = weakAreas.length;
+    
+    // Separate behavioral and technical topics
+    const technicalAreas = weakAreas.filter(wa => !wa.is_behavioral_only);
+    const behavioralAreas = weakAreas.filter(wa => wa.is_behavioral_only);
+    
+    // For technical: average all 5
+    // For behavioral: average only 3
+    const getTechAvg = (key) => technicalAreas.length 
+        ? Math.round(technicalAreas.reduce((s, wa) => s + (wa[key] || 0), 0) / technicalAreas.length)
+        : 0;
+    const getBehavioralAvg = (key) => behavioralAreas.length
+        ? Math.round(behavioralAreas.reduce((s, wa) => s + (wa[key] || 0), 0) / behavioralAreas.length)
+        : 0;
+    
     return {
-        semantic_avg:     Math.round(weakAreas.reduce((s, wa) => s + (wa.semantic_avg     || 0), 0) / n),
-        keyword_avg:      Math.round(weakAreas.reduce((s, wa) => s + (wa.keyword_avg      || 0), 0) / n),
-        completeness_avg: Math.round(weakAreas.reduce((s, wa) => s + (wa.completeness_avg || 0), 0) / n),
-        confidence_avg:   Math.round(weakAreas.reduce((s, wa) => s + (wa.confidence_avg   || 0), 0) / n),
-        grammar_avg:      Math.round(weakAreas.reduce((s, wa) => s + (wa.grammar_avg      || 0), 0) / n),
+        semantic_avg:     getTechAvg("semantic_avg"),
+        keyword_avg:      getTechAvg("keyword_avg"),
+        completeness_avg: Math.round((technicalAreas.reduce((s, wa) => s + (wa.completeness_avg || 0), 0) + behavioralAreas.reduce((s, wa) => s + (wa.completeness_avg || 0), 0)) / (weakAreas.length)),
+        confidence_avg:   Math.round((technicalAreas.reduce((s, wa) => s + (wa.confidence_avg || 0), 0) + behavioralAreas.reduce((s, wa) => s + (wa.confidence_avg || 0), 0)) / (weakAreas.length)),
+        grammar_avg:      Math.round((technicalAreas.reduce((s, wa) => s + (wa.grammar_avg || 0), 0) + behavioralAreas.reduce((s, wa) => s + (wa.grammar_avg || 0), 0)) / (weakAreas.length)),
     };
 }
 
-/** Render a sorted list of 5 dimension cards for a given scores object */
-function DimensionList({ scores }) {
+/** Render a sorted list of dimension cards for a given scores object */
+function DimensionList({ scores, isBehavioralOnly }) {
     const [expanded, setExpanded] = useState(null);
 
-    const sorted = [...DIMENSIONS].sort((a, b) => (scores[a.key] || 0) - (scores[b.key] || 0));
+    // Filter dimensions: exclude semantic & keyword for behavioral-only topics
+    const visibleDimensions = DIMENSIONS.filter(dim => {
+        if (isBehavioralOnly && dim.behavioralExclude) return false;
+        return true;
+    });
+
+    const sorted = [...visibleDimensions].sort((a, b) => (scores[a.key] || 0) - (scores[b.key] || 0));
 
     return (
         <div className="wa-list">
@@ -268,6 +296,7 @@ export default function WeakAreas() {
                         {/* ── Dimension cards ── */}
                         <DimensionList
                             scores={activeTab === "overall" ? overallScores : activeTopicRow}
+                            isBehavioralOnly={activeTab === "overall" ? false : activeTopicRow?.is_behavioral_only}
                         />
                     </>
                 )}

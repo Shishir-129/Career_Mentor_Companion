@@ -160,6 +160,7 @@ def create_response_from_audio(
         alternatives=alternatives,
         alternative_answer_keywords=alt_keywords,
         alternative_answer_components=alt_components,
+        question_type=question_type or "technical",
     )
 
     # ── 5. Generate feedback ──────────────────────────────────────────────────
@@ -178,6 +179,7 @@ def create_response_from_audio(
         filler_count=conf["filler_count"],
         pause_count=conf["pause_count"],
         transcript=transcript,
+        question_type=question_type or "technical",
     )
 
     # ── 6. Save response to database ─────────────────────────────────────────
