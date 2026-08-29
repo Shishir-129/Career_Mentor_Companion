@@ -177,13 +177,69 @@ Full interactive docs: [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs)
 | Hesitation pauses | **25%** | Silence gaps > 1 s per minute, detected from raw audio via librosa |
 | Filler word rate | **5%** | Per 100 words — kept low because Whisper ASR strips most fillers from transcripts |
 
-### Overall Session Score
+### Overall Score (Per-Question & Session Level)
 
+The overall score calculation differs based on **interview type**:
+
+#### Technical Questions (70% Quality, 30% Confidence)
 ```
 OVERALL = Answer Quality × 0.70 + Confidence × 0.30
 ```
+Content quality is weighted more heavily, reflecting how technical interviewers prioritise domain knowledge.
 
-Content quality is weighted more heavily than delivery, reflecting how technical interviewers prioritise domain knowledge.
+#### Behavioral Questions (70% Confidence, 30% Quality)
+```
+OVERALL = Confidence × 0.70 + Answer Quality × 0.30
+```
+Delivery and storytelling (STAR components) are weighted more heavily, reflecting how behavioral interviewers prioritise communication and soft skills.
+
+#### Session Score (Average of All Answers)
+```
+SESSION_SCORE = Average(question_1_overall, question_2_overall, ..., question_5_overall)
+```
+
+The session-level score is **always recalculated** when fetched from the API using the latest weights and formulas. This ensures:
+- ✅ Fresh calculations reflect any weight changes
+- ✅ No stale data from database
+- ✅ Consistent scoring even if question type changes
+- ✅ Accurate session history for frontend display
+
+**API Endpoint:** `GET /sessions/user/{user_id}/history`
+- Returns: `session_id`, `answered` (count of questions completed), `total_questions` (always 5), `overall_score` (average), `interview_type`, and per-component breakdowns
+
+### STAR Components (Behavioral Questions Only)
+
+For behavioral/HR questions, completeness is evaluated using the **STAR framework**:
+- **S**ituation — Context/background of the scenario
+- **T**ask — Your responsibility or challenge
+- **A**ction — Specific steps you took
+- **R**esult — Outcome and lessons learned
+
+**STAR Detection:**
+- Pattern-matching against 57 trigger phrases (e.g., "when I faced", "my role was", "I decided to", "the result was")
+- Case-insensitive substring matching across answer transcript
+- Score = (components_found / 4) × 100
+  - All 4 components = 100 (excellent STAR storytelling)
+  - 3 components = 75 (good)
+  - 2 components = 50 (fair)
+  - 1 component = 25 (weak)
+  - 0 components = 0 (missing STAR)
+
+**Behavioral Answer Quality Adjustments:**
+- `semantic_score = 0` (no ideal answer comparison — personal stories are valid)
+- `keyword_score = 0` (behavioral answers don't require technical vocabulary)
+- `completeness_score = 100%` weight (STAR structure is the primary signal)
+
+### Completeness Score — Technical vs. Behavioral
+
+#### Technical Questions (Expected Components)
+When a technical question has `expected_components` defined (e.g., ["definition", "example", "formula"]):
+- Detects presence of expected components via pattern matching
+- Applies parroting guard (if > 70% token overlap with question, caps score at 20)
+- Score = 0–100 based on component coverage
+
+#### Behavioral Questions (STAR Components)
+See STAR Components section above.
 
 ### Labels
 
@@ -420,6 +476,60 @@ Open [http://localhost:5173](http://localhost:5173).
 
 ---
 
+## Database Migration & Consistency Fix
+
+### Background
+
+When the behavioral/technical scoring system was implemented, some existing sessions in the database had an inconsistency: `answered > 0` (completed questions) but `total_score = NULL` (missing overall score). This prevented accurate session history display.
+
+### Migration Script
+
+A migration script (`fix_session_scores.py`) was created to fix this inconsistency:
+
+```powershell
+cd interview_coach
+
+# Install dependencies if not already installed
+python -m pip install sqlalchemy psycopg2-binary python-dotenv
+
+# Run migration from project root
+python fix_session_scores.py
+```
+
+**What it does:**
+1. Finds all sessions with `answered > 0` but `total_score IS NULL`
+2. Fetches all responses for each broken session
+3. Recalculates `overall_score` using the latest weighting formula:
+   - Technical: `answer_quality × 0.70 + confidence × 0.30`
+   - Behavioral: `confidence × 0.70 + answer_quality × 0.30`
+4. Updates `sessions.total_score` with calculated value
+5. Verifies all inconsistencies are fixed
+
+**Results (Executed 2026-08-29):**
+- Broken sessions found: **11**
+- Sessions fixed: **11/11 (100%)**
+- Verification: ✅ **All inconsistencies resolved**
+
+**Sample Fixed Sessions:**
+```
+Session 102: score=57.19 (Technical)
+Session 103: score=71.58 (Behavioral)
+Session 106: score=71.65 (Behavioral)
+Session 111: score=74.11 (Behavioral)
+... and 7 more
+```
+
+### Data Consistency Guarantees
+
+After migration:
+- ✅ All completed sessions have valid `total_score`
+- ✅ `total_score = average(per_question_overall_scores)`
+- ✅ `answered = count(responses)` (0–5)
+- ✅ Frontend session history displays correctly
+- ✅ No NULL scores for sessions with answered > 0
+
+---
+
 ## API Endpoints
 
 | Method | Path | Description |
@@ -470,6 +580,82 @@ Full interactive docs: [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs)
 | ≥ 65 | Good |
 | ≥ 45 | Average |
 | < 45 | Poor |
+
+---
+
+## Frontend Display & Integration
+
+### Session History Card
+
+The frontend displays session summaries in the **Dashboard → Sessions** section:
+
+```
+┌─────────────────────────────────────┐
+│ Session #256 - SDE Interview        │
+├─────────────────────────────────────┤
+│ Started: Jan 15, 2025 - 10:30 AM   │
+│                                      │
+│ Status: ✅ Completed                │
+│ Answered: 5/5                       │ ← answered / total_questions
+│ Overall Score: 80.24 / 100          │ ← overall_score
+│ Interview Type: Behavioral          │
+│                                      │
+│ Score Breakdown:                    │
+│ • Answer Quality: 69.6/100          │
+│ • Confidence: 84.8/100              │
+│ • Completeness (STAR): 85.0/100     │
+│ • Grammar: 75.0/100                 │
+│                                      │
+│ [View Detailed Feedback] [Retake]   │
+└─────────────────────────────────────┘
+```
+
+### API Response Format
+
+When the frontend calls `GET /sessions/user/{user_id}/history`, it receives:
+
+```json
+[
+  {
+    "session_id": 256,
+    "role": "SDE",
+    "completed": true,
+    "started_at": "2025-01-15T10:30:00Z",
+    "answered": 5,
+    "total_questions": 5,
+    "overall_score": 80.24,
+    "interview_type": "behavioral",
+    "scores": {
+      "answer_quality_avg": 69.6,
+      "semantic_avg": 0,
+      "keyword_avg": 0,
+      "completeness_avg": 85.0,
+      "confidence_avg": 84.8,
+      "grammar_avg": 75.0
+    }
+  }
+]
+```
+
+### Frontend Integration Notes
+
+1. **Answered Display:** `${answered} / ${total_questions}` (e.g., "3/5")
+2. **Score Display:** Use `overall_score` (not database `total_score`)
+3. **Interview Type:** Display `interview_type` to show which weighting was applied
+4. **Behavioral Questions:**
+   - Hide `semantic_avg` and `keyword_avg` (always 0 for behavioral)
+   - Display `completeness_avg` as "STAR Completeness" instead of generic "Completeness"
+5. **Technical Questions:**
+   - Display all component scores normally
+   - Use generic "Completeness" label
+
+### Session Calculation Details
+
+**Why scores are recalculated on every read:**
+- Ensures fresh calculations reflect latest weights
+- Prevents stale data when question type or weighting formulas change
+- Single source of truth: Responses table
+- No redundancy: No need to maintain both DB scores and calculated scores
 
 ---
 
@@ -564,6 +750,91 @@ The DOCX includes a cover page, table of contents, and all Q&As organised by Top
 
 ---
 
+## Implementation Details & Behavioral Scoring
+
+### Core Scoring Functions
+
+All scoring functions are implemented in `interview_coach/routers/sessions.py`:
+
+#### `calculate_overall_score(scores_dict, interview_type)`
+Applies type-specific weighting to individual question scores:
+- **Behavioral:** `confidence × 0.70 + answer_quality × 0.30`
+- **Technical:** `answer_quality × 0.70 + confidence × 0.30`
+
+#### `calculate_session_score(responses)`
+Calculates session-level score as average of all answered questions:
+1. Determines interview type from first response
+2. Calculates per-question overall score using `calculate_overall_score()`
+3. Returns: `(session_score, total_questions=5, answered_count, interview_type)`
+
+**Key feature:** Recalculated on every API call, never cached from DB.
+
+### STAR Component Detection
+
+Implemented in `interview_coach/services/completeness_score.py`:
+
+#### `_detect_star_components(transcript, question_text)`
+Pattern-matches 57 trigger phrases across 4 STAR components:
+- **57 phrases** across Situation, Task, Action, Result
+- **Case-insensitive** substring matching on answer transcript
+- **Score calculation:** (components_found / 4) × 100
+- **Output:** List of detected components with line numbers
+
+#### Key STAR Trigger Phrases (Sample)
+```
+Situation:  "when I faced", "in a situation where", "I was assigned", "the challenge was"
+Task:       "my role was", "my responsibility", "I was tasked with", "I had to"
+Action:     "I decided to", "I approached it by", "I implemented", "I collaborated"
+Result:     "the result was", "as a result", "I learned that", "the outcome"
+```
+
+### Behavioral Answer Quality Adjustments
+
+In `interview_coach/services/answer_quality_scorer.py`:
+
+```python
+# For behavioral questions:
+semantic_score = 0          # No ideal answer comparison
+keyword_score = 0           # No keyword requirements
+completeness_score = 100    # STAR structure score (0-100)
+answer_quality = completeness_score  # Uses only STAR for behavioral
+```
+
+### Database Schema Changes
+
+**Sessions Table:**
+```sql
+ALTER TABLE sessions ADD COLUMN question_type VARCHAR(30);
+-- Now stores interview type (behavioral/technical) at session creation
+-- Used by API to determine weighting formula
+```
+
+**Responses Table (No changes needed):**
+- `question_type` field already exists (line 65 in models.py)
+- `answer_quality_score`, `confidence_score` used for calculation
+- All weighting formulas use these two fields
+
+### API Endpoint Modifications
+
+**GET `/sessions/user/{user_id}/history`** (lines 96-148 in sessions.py):
+- Queries all sessions for user
+- For each session: Fetches responses and **recalculates** overall_score fresh
+- Returns: `overall_score` (calculated), `interview_type`, and per-component averages
+- Never returns database `total_score` directly
+
+### Migration Script (`fix_session_scores.py`)
+
+Located in project root, fixes data inconsistency:
+1. Connects to PostgreSQL using `DATABASE_URL` from `.env`
+2. Finds sessions: `answered > 0 AND total_score IS NULL`
+3. For each broken session:
+   - Fetches all responses
+   - Calls `calculate_session_score(responses)` with latest logic
+   - Updates `sessions.total_score`
+4. Verifies: No broken sessions remain
+
+---
+
 ## Notes
 
 - **Auth** — email + password login. Password hashed with argon2. User profile stored in `localStorage` after login. Sign out clears the session.
@@ -571,3 +842,91 @@ The DOCX includes a cover page, table of contents, and all Q&As organised by Top
 - **Coaching feedback** — score-derived rule-based narrative. Not LLM-generated. Reads the actual numeric scores and identified gaps to produce specific, actionable paragraphs.
 - **Audio** — browser sends WebM; Whisper handles it directly. File is deleted immediately after transcription.
 - **Model warmup** — Whisper, sentence-transformers, and spaCy load at startup via the `lifespan` handler, so all responses after the first are fast.
+- **Behavioral scoring** — different weighting based on interview type:
+  - **Technical** (70% quality, 30% confidence): Emphasises knowledge and accuracy
+  - **Behavioral** (70% confidence, 30% quality): Emphasises communication and STAR storytelling
+  - Type detected from question metadata; weights applied at session-level averaging
+  - Session scores always recalculated fresh from Responses table, never cached
+- **STAR framework** — Behavioral answers evaluated on 4 components: Situation, Task, Action, Result. 57 trigger phrases detect each component. Missing STAR components receive lower completeness scores.
+- **Multi-reference scoring** — questions may have up to 2 alternative answers. System scores against the best match (highest semantic similarity), preventing penalisation for valid alternatives.
+- **Data consistency** — migration script fixes incomplete sessions with missing scores. All sessions with `answered > 0` guarantee valid `total_score` after migration.
+
+---
+
+## Troubleshooting
+
+### Migration Script Issues
+
+| Issue | Cause | Solution |
+|-------|-------|----------|
+| `ModuleNotFoundError: No module named 'sqlalchemy'` | Dependencies not installed | Run `pip install sqlalchemy psycopg2-binary python-dotenv` |
+| `DATABASE_URL is None` | `.env` file not found | Copy `interview_coach/.env` to project root: `cp interview_coach/.env .env` |
+| Script runs but no output | Encoding issue on Windows | Python script handles encoding automatically; if still silent, check `.env` file exists |
+| `No broken sessions found` | Database already consistent | This is success! All sessions have valid scores. |
+| `Still X sessions with missing scores` | Migration failed partially | Check logs for specific session errors; may indicate corrupt response data |
+
+### Session History Display Issues
+
+| Symptom | Check |
+|---------|-------|
+| Sessions showing `overall_score: NULL` | Run migration script; check `.env` DATABASE_URL |
+| Frontend shows "Answered: 0/5" for completed session | Verify Responses created for each question; check `sessions.answered` matches response count |
+| STAR components not displayed for behavioral | Verify `interview_type = "behavioral"` in API response; frontend should map to STAR display |
+| Inconsistent scores between sessions | All sessions recalculated fresh; scores will differ by weighting differences (technical vs behavioral) |
+
+---
+
+## Key Files & Changes Summary
+
+### Files Modified
+
+| File | Lines | Changes | Purpose |
+|------|-------|---------|---------|
+| `interview_coach/routers/sessions.py` | 26-88 | Added `calculate_overall_score()` and `calculate_session_score()` | Type-aware weighting & session averaging |
+| `interview_coach/routers/sessions.py` | 96-148 | Updated `get_user_sessions()` endpoint | Fresh score calculation, returns `overall_score` and `interview_type` |
+| `interview_coach/services/completeness_score.py` | 44-68 | Added `STAR_PATTERNS` dictionary (57 phrases) | Behavioral question component detection |
+| `interview_coach/services/completeness_score.py` | 125-143 | Added `_detect_star_components()` function | Pattern-matching for STAR components |
+| `interview_coach/services/completeness_score.py` | 162-287 | Updated `compute_completeness_score()` logic | Branch for behavioral vs technical scoring |
+| `interview_coach/services/answer_quality_scorer.py` | 124-130 | Pass `question_type` to completeness scorer | Enable STAR detection |
+
+### Files Created
+
+| File | Purpose | Contents |
+|------|---------|----------|
+| `fix_session_scores.py` | Migration script | Find & fix NULL `total_score` values, verify results |
+| `.env` | Environment configuration | Copied from `interview_coach/.env` to enable migration script |
+| `SESSION_SCORING_EXPLAINED.md` | Documentation | Complete visual guide to session scoring architecture |
+
+### Database Tables (No migrations needed)
+
+| Table | Field | Already Exists? | Usage |
+|-------|-------|-----------------|-------|
+| `Sessions` | `question_type` | ❓ May need manual add | Stores interview type for quick lookup |
+| `Sessions` | `total_score` | ✅ Yes | Populated by migration script |
+| `Sessions` | `answered` | ✅ Yes | Incremented as responses added |
+| `Responses` | `question_type` | ✅ Yes | Source of truth for type-aware calculation |
+| `Responses` | `answer_quality_score` | ✅ Yes | Used in weighting formula |
+| `Responses` | `confidence_score` | ✅ Yes | Used in weighting formula |
+
+### How to Find Implementation Details
+
+**Behavioral Scoring Logic:**
+- `interview_coach/routers/sessions.py` lines 26-48 → `calculate_overall_score()`
+- `interview_coach/services/completeness_score.py` lines 44-68 → STAR patterns
+- `interview_coach/services/completeness_score.py` lines 125-143 → STAR detection
+
+**Session Average Calculation:**
+- `interview_coach/routers/sessions.py` lines 51-88 → `calculate_session_score()`
+- `interview_coach/routers/sessions.py` lines 96-148 → `get_user_sessions()` endpoint
+
+**Data Consistency Fix:**
+- `fix_session_scores.py` lines 50-74 → Migration logic
+- `fix_session_scores.py` lines 87-133 → Verification logic
+
+---
+
+## References & Additional Documentation
+
+- **SCORING_FLOW_DIAGRAMS.md** — Visual flowcharts of session calculation and database architecture
+- **SESSION_SCORING_EXPLAINED.md** — Complete breakdown of scoring with examples
+- **IMPLEMENTATION_SUMMARY.md** — Comprehensive feature overview (from prior checkpoint)

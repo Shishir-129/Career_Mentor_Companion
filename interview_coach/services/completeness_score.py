@@ -41,6 +41,32 @@ COMPONENT_PATTERNS: dict[str, list[str]] = {
     ],
 }
 
+# STAR components for behavioral questions (Situation, Task, Action, Result)
+STAR_PATTERNS: dict[str, list[str]] = {
+    "situation": [
+        "was working", "was assigned", "faced", "encountered", "situation was",
+        "context", "background", "challenge was", "the problem", "initially",
+        "at the time", "team was", "company was", "my role was", "responsible for",
+    ],
+    "task": [
+        "had to", "needed to", "tasked with", "asked to", "assigned to",
+        "my responsibility", "my goal", "objective was", "aim was", "responsibility",
+        "had to solve", "needed to address", "had to improve", "had to build",
+    ],
+    "action": [
+        "i did", "i implemented", "i created", "i developed", "i worked",
+        "i proposed", "i suggested", "i initiated", "i took", "i decided",
+        "i analyzed", "i researched", "i collaborated", "we decided", "we implemented",
+        "approached", "solution", "steps i took", "what i did", "how i",
+    ],
+    "result": [
+        "resulted in", "led to", "improved", "increased", "reduced",
+        "achieved", "accomplished", "successfully", "outcome was", "result was",
+        "finished", "completed", "delivered", "learned", "gained", "discovered",
+        "percent", "%", "times", "followers", "users", "metrics",
+    ],
+}
+
 # Human-readable coaching tip for each missing component
 COACHING_TIPS: dict[str, str] = {
     "definition":  "Try opening with a clear definition of the concept.",
@@ -49,6 +75,14 @@ COACHING_TIPS: dict[str, str] = {
     "comparison":  "Consider comparing this with a related concept.",
     "use_case":    "Your answer would be stronger with a real-world use case.",
     "limitation":  "Mention any limitations or trade-offs to show deeper understanding.",
+}
+
+# STAR coaching tips for behavioral questions
+STAR_COACHING_TIPS: dict[str, str] = {
+    "situation": "Describe the situation: What was the context? What team/project were you working on?",
+    "task":      "Explain your task: What was your responsibility or goal?",
+    "action":    "Detail your action: What specific steps did you take? How did you approach it?",
+    "result":    "Quantify your result: What was the outcome? How did it impact the project or team?",
 }
 
 
@@ -101,6 +135,21 @@ def _detect_components(
     return found, missing
 
 
+def _detect_star_components(answer_lower: str) -> tuple[list[str], list[str]]:
+    """Detect STAR components for behavioral questions"""
+    found, missing = [], []
+    star_components = ["situation", "task", "action", "result"]
+    
+    for component in star_components:
+        patterns = STAR_PATTERNS.get(component, [])
+        if any(p in answer_lower for p in patterns):
+            found.append(component)
+        else:
+            missing.append(component)
+    
+    return found, missing
+
+
 # ─── Main scorer ──────────────────────────────────────────────────────────────
 
 def compute_completeness_score(
@@ -109,6 +158,7 @@ def compute_completeness_score(
     ideal_answer: str | None = None,
     question_text: str | None = None,
     alternatives: list[str] | None = None,
+    question_type: str = "technical",
 ) -> dict:
     """
     Returns:
@@ -118,40 +168,78 @@ def compute_completeness_score(
         coaching_tips       — list[str]
 
     Scoring strategy:
-      1. Parroting guard: if the user mostly repeated the question,
-         cap the score at 20 regardless of other signals.
-      2. Component-based path (preferred): score = found/expected × 100,
-         then apply short-answer cap and parroting adjustment.
-      3. Keyword-coverage path (no components): score = overlap(answer,
-         ideal) weighted by length ratio, penalised for parroting/shortness.
+      For Technical Questions:
+        1. Parroting guard: if the user mostly repeated the question,
+           cap the score at 20 regardless of other signals.
+        2. Component-based path (preferred): score = found/expected × 100,
+           then apply short-answer cap and parroting adjustment.
+        3. Keyword-coverage path (no components): score = overlap(answer,
+           ideal) weighted by length ratio, penalised for parroting/shortness.
+      
+      For Behavioral Questions:
+        1. Always use STAR (Situation, Task, Action, Result) components
+        2. Score = number of STAR components found / 4 × 100
+        3. Apply parroting penalty if user just echoed the question
     """
     try:
         answer_lower = (user_answer or "").strip().lower()
         word_count   = len(answer_lower.split()) if answer_lower else 0
+        is_behavioral = question_type.lower().strip() == "behavioral"
 
         # ── Parroting detection ─────────────────────────────────────────────
         parrot = _parroting_ratio(answer_lower, question_text or "")
 
-        # ── Resolve verified components ─────────────────────────────────────
+        # ── Empty user answer ───────────────────────────────────────────────
+        if not answer_lower:
+            if is_behavioral:
+                return _zero_result(["situation", "task", "action", "result"])
+            else:
+                expected = _parse_expected(expected_components_json)
+                return _zero_result(expected)
+
+        # ── Very short answer (< 8 words) ────────────────────────────────────
+        if word_count < 8:
+            if is_behavioral:
+                _, missing = _detect_star_components(answer_lower)
+                tips = [STAR_COACHING_TIPS.get(c, "") for c in missing]
+            else:
+                expected = _parse_expected(expected_components_json)
+                missing = expected
+                tips = [COACHING_TIPS.get(c, "") for c in expected] if expected else []
+            
+            return {
+                "completeness_score": max(5.0, word_count * 2.0),
+                "components_found":   [],
+                "components_missing": missing,
+                "coaching_tips":      tips,
+            }
+
+        # ── Behavioral: Use STAR components ─────────────────────────────────
+        if is_behavioral:
+            found, missing = _detect_star_components(answer_lower)
+            score = (len(found) / 4) * 100  # 4 STAR components
+
+            # Short answer penalty: < 30 words caps at 60
+            if word_count < 30:
+                score = min(score, 60.0)
+
+            # Parroting penalty
+            score = _apply_parrot_penalty(score, parrot)
+
+            return {
+                "completeness_score": round(score, 2),
+                "components_found":   found,
+                "components_missing": missing,
+                "coaching_tips":      [STAR_COACHING_TIPS.get(c, "") for c in missing],
+            }
+
+        # ── Technical: Use expected components or keyword coverage ──────────
+        # Resolve verified components
         expected = _parse_expected(expected_components_json)
         if expected and ideal_answer and ideal_answer.strip():
             ideal_lower = ideal_answer.lower()
             verified, _ = _detect_components(ideal_lower, expected)
             expected = verified  # drop components the ideal doesn't demonstrate
-
-        # ── Empty user answer ───────────────────────────────────────────────
-        if not answer_lower:
-            return _zero_result(expected)
-
-        # ── Very short answer (< 8 words) ────────────────────────────────────
-        if word_count < 8:
-            tips = [COACHING_TIPS.get(c, "") for c in expected] if expected else []
-            return {
-                "completeness_score": max(5.0, word_count * 2.0),
-                "components_found":   [],
-                "components_missing": expected,
-                "coaching_tips":      tips,
-            }
 
         # ── Path A: component-based ──────────────────────────────────────────
         if expected:

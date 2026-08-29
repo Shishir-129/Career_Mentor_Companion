@@ -30,7 +30,13 @@ def end_session(db: Session, session_id: int, data: SessionEnd):
         return None
 
     responses = db.query(Responses).filter(Responses.session_id == session_id).all()
-    answered_count = len(responses)
+    
+    # Count DISTINCT questions answered (not total responses)
+    # If user re-answered the same question, it should only count ONCE
+    distinct_questions = set()
+    for response in responses:
+        distinct_questions.add(response.question_id)
+    answered_count = len(distinct_questions)
 
     # Update session with data from request
     for key, value in data.model_dump(exclude_unset=True).items():
@@ -47,7 +53,7 @@ def end_session(db: Session, session_id: int, data: SessionEnd):
         
         session.total_score = round(avg_quality * 0.70 + avg_confidence * 0.30, 2)
 
-    # Track answered questions count — cap at total_questions to guard against duplicate submissions
+    # Track answered questions count — count DISTINCT questions only, cap at 5 (never show 6/5)
     session.answered = min(answered_count, session.total_questions)
     # Mark as completed only if all questions are answered
     session.completed = (answered_count >= session.total_questions)
