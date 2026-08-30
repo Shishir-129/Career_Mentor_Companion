@@ -48,6 +48,61 @@ def calculate_overall_score(scores_dict, interview_type: str = "technical"):
         return round(quality * 0.70 + confidence * 0.30, 2)
 
 
+def calculate_session_score(responses):
+    """
+    Calculate session-level overall score as the average of all answered questions.
+    
+    For each response, the overall_score is already calculated per-question.
+    Session score = average of individual question overall scores.
+    
+    IMPORTANT: If user re-answers the same question multiple times, only count it ONCE.
+    answered_count = count of DISTINCT questions answered (max 5), not total responses.
+    
+    Args:
+        responses: List of Response objects from Responses table
+    
+    Returns:
+        Tuple: (overall_session_score, total_questions, answered_count, interview_type)
+    """
+    if not responses:
+        return 0.0, 5, 0, "technical"
+    
+    # Determine interview type from responses
+    interview_type = responses[0].question_type if responses and responses[0].question_type else "technical"
+    
+    # Count DISTINCT questions answered (not total responses)
+    # If user re-answers Q1 twice and Q2 once, answered_count = 2, not 3
+    distinct_questions = set()
+    for response in responses:
+        distinct_questions.add(response.question_id)
+    answered_count = len(distinct_questions)
+    
+    # Calculate overall score for each response
+    # For re-answered questions, use the LATEST response (assumption: responses are ordered by time)
+    responses_by_question = {}
+    for response in responses:
+        responses_by_question[response.question_id] = response  # Latest overwrites earlier
+    
+    overall_scores = []
+    for response in responses_by_question.values():
+        quality = response.answer_quality_score or 0
+        confidence = response.confidence_score or 0
+        
+        # Apply the same logic as calculate_overall_score
+        is_behavioral = interview_type.lower().strip() == "behavioral"
+        if is_behavioral:
+            overall = confidence * 0.70 + quality * 0.30
+        else:
+            overall = quality * 0.70 + confidence * 0.30
+        
+        overall_scores.append(overall)
+    
+    # Session score is average of answered questions
+    session_score = round(mean(overall_scores), 2) if overall_scores else 0.0
+    
+    return session_score, 5, answered_count, interview_type
+
+
 @router.post("/", response_model=SessionResponse)
 def start_session(session: SessionCreate, db: Session = Depends(get_db)):
     return create_session(db, session)
@@ -72,7 +127,7 @@ def get_user_sessions(user_id: int, db: Session = Depends(get_db)):
             if not responses:
                 continue
             
-            # Calculate aggregated scores
+            # Calculate aggregated scores (for detailed breakdown)
             scores = {
                 'answer_quality_avg': calculate_average([r.answer_quality_score for r in responses]),
                 'semantic_avg': calculate_average([r.semantic_score for r in responses]),
@@ -82,14 +137,10 @@ def get_user_sessions(user_id: int, db: Session = Depends(get_db)):
                 'grammar_avg': calculate_average([r.grammar_score for r in responses]),
             }
             
-            # Calculate overall score using question_type from responses (if available)
-            # For consistency, use the first response's question_type or default to "technical"
-            interview_type = responses[0].question_type if responses and responses[0].question_type else "technical"
-            overall_score = calculate_overall_score(scores, interview_type)
+            # Calculate session-level overall score (average of all answered questions)
+            overall_session_score, total_q, answered_count, interview_type = calculate_session_score(responses)
             
-            # Derive answered/completed from actual response count to fix stale DB values
-            answered_count = len(responses)
-            answered_capped = min(answered_count, session.total_questions)
+            # Update session metadata
             is_completed = session.completed or (answered_count >= session.total_questions)
 
             result.append({
@@ -97,9 +148,10 @@ def get_user_sessions(user_id: int, db: Session = Depends(get_db)):
                 'role': session.role,
                 'completed': is_completed,
                 'started_at': session.started_at,
-                'answered': answered_capped,
-                'total_questions': session.total_questions,
-                'overall_score': session.total_score or overall_score,
+                'answered': answered_count,
+                'total_questions': total_q,
+                'overall_score': overall_session_score,  # Always recalculated from responses
+                'interview_type': interview_type,
                 'scores': scores
             })
         
