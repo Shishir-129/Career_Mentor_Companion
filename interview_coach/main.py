@@ -52,6 +52,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Interview Coach API", lifespan=lifespan)
 
+# ✅ CORS Configuration - MUST be added BEFORE including routers
 _extra_origins = [o.strip() for o in os.getenv("CORS_ORIGINS", "").split(",") if o.strip()]
 
 app.add_middleware(
@@ -60,17 +61,31 @@ app.add_middleware(
         "https://career-mentor-companion.vercel.app",
         "http://localhost:5173",
         "http://localhost:5174",
+        *_extra_origins,
     ],
-    allow_credentials=True,  # ← IMPORTANT for cookies/auth
-    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],  # ← Add OPTIONS
+    allow_origin_regex=r"https://.*\.(ngrok(-free)?\.(app|dev)|vercel\.app|sunilpaudel013\.com\.np)",
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
     allow_headers=[
         "Content-Type",
         "Authorization",
         "Accept",
         "Origin",
-    ],  # ← Specific headers
+        "Access-Control-Allow-Origin",
+        "ngrok-skip-browser-warning",
+        "User-Agent",
+    ],
+    max_age=86400,  # Cache preflight for 24 hours
 )
 
+# ✅ Add ngrok bypass header for all responses
+@app.middleware("http")
+async def add_ngrok_bypass(request, call_next):
+    response = await call_next(request)
+    response.headers["ngrok-skip-browser-warning"] = "true"
+    return response
+
+# ✅ Include routers AFTER CORS middleware is configured
 app.include_router(user_router)
 app.include_router(question_router)
 app.include_router(session_router)
