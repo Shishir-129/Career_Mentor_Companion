@@ -54,7 +54,7 @@ app.add_middleware(
     allow_origins=[
         "http://localhost:5173",  # local
         "http://localhost:5174",  # local
-        "",  # deployed: set this to the deployed frontend URL
+        "https://career-mentor-companion.vercel.app",  # deployed frontend (Vercel)
     ],
     allow_credentials=True,
     allow_methods=["*"],
