@@ -1,4 +1,5 @@
 import logging
+import os
 from contextlib import asynccontextmanager
 from pathlib import Path
 from uuid import uuid4
@@ -51,8 +52,6 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Interview Coach API", lifespan=lifespan)
 
-import os
-
 _extra_origins = [o.strip() for o in os.getenv("CORS_ORIGINS", "").split(",") if o.strip()]
 
 app.add_middleware(
@@ -85,7 +84,7 @@ _MODEL = None
 def get_whisper_model():
     global _MODEL
     if _MODEL is None:
-        _MODEL = whisper.load_model("base")
+        _MODEL = whisper.load_model(os.getenv("WHISPER_MODEL", "base"))
     return _MODEL
 
 
