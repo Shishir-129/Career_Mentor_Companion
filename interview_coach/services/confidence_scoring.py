@@ -20,7 +20,7 @@ FILLER_WORDS = {
     "um", "uh", "ah", "eh", "hmm", "umm", "uhh",
     "you know", "i mean", "kind of", "sort of",
     "literally", "basically", "actually", "right",
-    "like i said", "and um", "and uh",
+    "like i said", "and um", "and uh", "blah", "yada yada",
 }
 
 # ─── Score weights — must sum to 1.0 ─────────────────────────────────────────

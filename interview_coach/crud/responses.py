@@ -57,15 +57,15 @@ def create_response_from_audio(
     audio_path = str(saved_path)
 
     try:
-        # ✅ Check file was actually saved
+        #  Check file was actually saved
         file_size = os.path.getsize(audio_path)
-        print(f"📂 Audio file saved: {audio_path} ({file_size} bytes)")
+        print(f" Audio file saved: {audio_path} ({file_size} bytes)")
         if file_size == 0:
             raise ValueError("Audio file is empty - browser recording may have failed")
         
         # ── 2. Run Whisper (transcription) + Librosa (audio analysis) in parallel
         #       Both only need the audio file — no dependency between them
-        print("🎤 Running transcription and audio analysis in parallel...")
+        print(" Running transcription and audio analysis in parallel...")
         with ThreadPoolExecutor(max_workers=2) as executor:
             future_transcript = executor.submit(transcribe_fn, audio_path) if transcribe_fn else None
             future_audio_data = executor.submit(analyze_audio, audio_path)
@@ -74,7 +74,7 @@ def create_response_from_audio(
             audio_data = future_audio_data.result()   # {duration_secs, pause_count}
 
     except Exception as exc:
-        print(f"❌ Audio processing failed: {type(exc).__name__}: {exc}")
+        print(f" Audio processing failed: {type(exc).__name__}: {exc}")
         raise HTTPException(status_code=500, detail=f"Transcription failed: {exc}") from exc
     finally:
         # ── 3. Delete audio immediately — it has served its purpose ──────────
