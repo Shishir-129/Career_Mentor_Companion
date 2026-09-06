@@ -7,7 +7,7 @@ An AI-powered mock interview platform for Data Science roles. Candidates registe
 ## 🚀 Live Demo
 
 - **Frontend:** https://career-mentor-companion.vercel.app
-- **Backend API docs:** https://ham-matching-deutsch-chairman.trycloudflare.com/docs
+- **Backend API docs:** https://interview-coach-api.sunilpaudel013.com.np/docs
 
 > Note: the backend is served via a Cloudflare Tunnel from a local Docker container, so the URL above may change if the tunnel is restarted.
 
