@@ -54,14 +54,15 @@ app = FastAPI(title="Interview Coach API", lifespan=lifespan)
 
 _extra_origins = [o.strip() for o in os.getenv("CORS_ORIGINS", "").split(",") if o.strip()]
 
-
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "https://career-mentor-companion.vercel.app",
         "http://localhost:5173",
         "http://localhost:5174",
+        *_extra_origins,
     ],
+    allow_origin_regex=r"https://.*\.(ngrok(-free)?\.(app|dev)|vercel\.app|sunilpaudel013\.com\.np)",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
