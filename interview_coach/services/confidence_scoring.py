@@ -268,14 +268,14 @@ def compute_delivery_scores(
     tips = []
     if wpm > 0 and not (PACE_EXCELLENT[0] <= wpm <= PACE_EXCELLENT[1]):
         tips.append(
-            f"Speaking pace is {wpm:.0f} WPM — "
-            f"aim for {PACE_EXCELLENT[0]}–{PACE_EXCELLENT[1]} WPM."
+            f"Speaking pace is {wpm:.0f} WPM, "
+            f"aim for {PACE_EXCELLENT[0]}-{PACE_EXCELLENT[1]} WPM."
         )
     if filler_count > 0:
         rate = round((filler_count / word_count) * 100, 1)
         tips.append(f"{filler_count} filler word(s) detected ({rate} per 100 words).")
     if duration_secs > 0 and (pause_count / (duration_secs / 60.0)) > 3:
-        tips.append("Frequent hesitation pauses detected — practice smoother transitions between ideas.")
+        tips.append("Frequent hesitation pauses detected. Try practicing smoother transitions between ideas.")
 
     feedback = f"Delivery: {label}. " + " ".join(tips) if tips else f"Delivery: {label}."
 
