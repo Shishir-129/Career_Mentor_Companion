@@ -1,0 +1,7 @@
+venv_py312/
+__pycache__/
+*.pyc
+uploads/
+.env
+.git/
+*.log
