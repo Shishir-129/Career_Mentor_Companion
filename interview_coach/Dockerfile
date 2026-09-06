@@ -13,15 +13,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Install Python dependencies first (better layer caching — only reinstalls if requirements.txt changes)
 # torch is installed separately from the CPU-only wheel index first, so the requirements.txt
 # install doesn't pull in ~2GB of unnecessary NVIDIA CUDA packages (this machine has no GPU).
+# requirements.txt already pins the en_core_web_sm wheel directly (works around a spaCy 3.7.2
+# bug where `spacy download` produces a malformed/404ing URL).
 COPY requirements.txt .
 RUN pip install --no-cache-dir --upgrade pip \
     && pip install --no-cache-dir torch==2.2.2 --index-url https://download.pytorch.org/whl/cpu \
     && pip install --no-cache-dir -r requirements.txt
-
-# Bake spaCy model into the image at build time (not runtime).
-# `spacy download` is skipped here because spaCy 3.7.2 has a known bug that produces a
-# malformed (404ing) download URL; installing the model wheel directly avoids that.
-RUN pip install --no-cache-dir https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.7.1/en_core_web_sm-3.7.1-py3-none-any.whl
 
 # Bake Whisper "base" model into the image at build time (avoids slow first-request download)
 RUN python -c "import whisper; whisper.load_model('base')"
