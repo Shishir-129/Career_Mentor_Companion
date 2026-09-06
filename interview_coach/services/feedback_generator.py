@@ -24,7 +24,7 @@ def _derive_strengths(d: dict) -> list[str]:
     if 120 <= d["speaking_speed"] <= 155:
         strengths.append("Excellent speaking pace (120-155 WPM).")
     elif 100 <= d["speaking_speed"] < 120 or 155 < d["speaking_speed"] <= 175:
-        strengths.append("Comfortable speaking pace — easy for an interviewer to follow.")
+        strengths.append("Comfortable speaking pace, easy for an interviewer to follow.")
     return strengths or ["Keep practising to build confidence and depth."]
 
 
@@ -56,16 +56,16 @@ def _build_narrative(
     # ── Opening: overall answer quality ──────────────────────────────────────
     if is_behavioral:
         if answer_quality_score >= 80:
-            opening = "Strong answer — you told a clear, well-structured story."
+            opening = "Strong answer. You told a clear, well-structured story."
         elif answer_quality_score >= 65:
             opening = "Good response. Your story covered most of the key elements."
         elif answer_quality_score >= 45:
-            opening = "Your answer has potential but needs a clearer story structure (Situation → Task → Action → Result)."
+            opening = "Your answer has potential but needs a clearer story structure (Situation, Task, Action, Result)."
         else:
             opening = "Focus on structuring your answer: describe the Situation, your Task, the Action you took, and the Result."
     else:
         if answer_quality_score >= 80:
-            opening = "Strong answer — you demonstrated a solid, well-rounded understanding of the topic."
+            opening = "Strong answer. You demonstrated a solid, well-rounded understanding of the topic."
         elif answer_quality_score >= 65:
             opening = "Good response overall. You covered the core concept effectively."
         elif answer_quality_score >= 45:
@@ -75,12 +75,12 @@ def _build_narrative(
 
     # Flag if the answer was too brief
     if 0 < word_count < 25:
-        opening += " Your answer was quite brief — interviewers generally expect more elaboration."
+        opening += " Your answer was quite brief, and interviewers generally expect more elaboration."
 
     # ── Middle: diagnostic observation specific to the score profile ──────────
     if is_behavioral:
         if completeness_score >= 75:
-            middle = "Your answer had a clear structure — the interviewer could follow your story easily."
+            middle = "Your answer had a clear structure, so the interviewer could follow your story easily."
         elif completeness_score >= 50:
             middle = "Good attempt, but try to be more explicit about the outcome or result of your action."
         else:
@@ -93,7 +93,7 @@ def _build_narrative(
         elif semantic_score < 50 and keyword_score >= 65:
             middle = "You used the right terminology, but the core explanation drifted from what was being asked."
         elif completeness_score < 50:
-            middle = "The answer touched on the topic but was missing important structural elements — a definition or a concrete example would strengthen it considerably."
+            middle = "The answer touched on the topic but was missing important structural elements. A definition or a concrete example would strengthen it considerably."
         elif strengths:
             middle = strengths[0]
         else:
@@ -103,11 +103,11 @@ def _build_narrative(
     if improvements:
         improve = f"To improve: {improvements[0].rstrip('.')}."
     else:
-        improve = "Keep practising — consistency is the fastest path to improvement."
+        improve = "Keep practising. Consistency is the fastest path to improvement."
 
     # ── Closing: delivery ─────────────────────────────────────────────────────
     if confidence_score >= 75:
-        closing = "Your delivery was confident and clear — that composure will serve you well in real interviews."
+        closing = "Your delivery was confident and clear. That composure will serve you well in real interviews."
     elif confidence_score >= 55:
         closing = "Decent delivery. Aim for a steady pace and reduce hesitation pauses to come across more polished."
     else:
