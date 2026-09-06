@@ -60,12 +60,15 @@ app.add_middleware(
         "https://career-mentor-companion.vercel.app",
         "http://localhost:5173",
         "http://localhost:5174",
-        *_extra_origins,
     ],
-    allow_origin_regex=r"https://.*\.(ngrok(-free)?\.(app|dev)|vercel\.app|sunilpaudel013\.com\.np)",
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_credentials=True,  # ← IMPORTANT for cookies/auth
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],  # ← Add OPTIONS
+    allow_headers=[
+        "Content-Type",
+        "Authorization",
+        "Accept",
+        "Origin",
+    ],  # ← Specific headers
 )
 
 app.include_router(user_router)
